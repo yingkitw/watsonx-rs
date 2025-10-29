@@ -1,0 +1,5 @@
+---
+source: crates/wx-watsonx/src/tests.rs
+expression: "format!(\"quality_{}: {}\", name, score)"
+---
+quality_good_command: 1
