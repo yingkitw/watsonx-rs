@@ -1,0 +1,17 @@
+# Cargo configuration for optimized builds
+
+[build]
+# Parallel compilation (default is number of CPU cores)
+
+[target.x86_64-apple-darwin]
+# macOS specific optimizations
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",  # Use faster linker if available
+    "-C", "target-cpu=native",       # Optimize for current CPU
+]
+
+[alias]
+# Convenient aliases for optimized builds
+build-release = "build --release"
+build-minimal = "build --release --profile minimal"
+check-all = "check --all-targets"

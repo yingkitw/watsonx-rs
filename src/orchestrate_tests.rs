@@ -104,10 +104,11 @@ async fn test_orchestrate_config_get_base_url() {
     let config = OrchestrateConfig::new("test-instance-123".to_string());
     let base_url = config.get_base_url();
     
-    assert!(base_url.contains("test-instance-123"));
+    // Base URL should be from WXO_URL env var or default pattern
     assert!(base_url.contains("us-south"));
-    assert!(base_url.contains("/v1/orchestrate"));
-    assert!(base_url.starts_with("https://api."));
+    assert!(base_url.contains("watson-orchestrate.cloud.ibm.com"));
+    assert!(base_url.contains("/api/v1/"));
+    assert!(base_url.starts_with("https://"));
 }
 
 #[tokio::test]

@@ -9,9 +9,13 @@ This SDK aims to provide comprehensive support for the entire IBM WatsonX ecosys
 - **🤖 watsonx.ai** - AI and machine learning models (current focus)
 - **📊 watsonx.data** - Data management and analytics
 - **🛡️ watsonx.governance** - AI governance and compliance
-- **⚙️ watsonx.orchestrate** - Workflow orchestration and automation
+- **⚙️ watsonx.orchestrate** - Agentic AI with orchestration and automation
 
 Currently, we support both `watsonx.ai` (text generation) and `watsonx.orchestrate` (custom assistants and document management), with the architecture designed to expand across all WatsonX services.
+
+## Reference:
+
+watsonx Orchestrate API Reference: https://developer.ibm.com/apis/catalog/watsonorchestrate--custom-assistants/api
 
 ## 🚀 Quick Start
 
@@ -432,20 +436,29 @@ cargo run --example orchestrate_advanced
 
 # Practical use cases - real-world scenarios
 cargo run --example orchestrate_use_cases
+
+# Chat with documents - document-based Q&A
+cargo run --example chat_with_documents
+
+# Test agent documents - document discovery
+cargo run --example test_agent_documents
 ```
 
 ### WatsonX Orchestrate Capabilities
 
 The SDK provides comprehensive support for Watson Orchestrate with robust error handling and graceful degradation:
 
-- **Agent Management**: List and retrieve agents
+- **Agent Management**: List, retrieve, and interact with agents
 - **Conversation Management**: Send messages (streaming and non-streaming) with thread context
 - **Thread Management**: Create, list, and delete conversation threads
 - **Run Management**: Track and cancel agent executions
-- **Tool Management**: List tools, get tool details, and execute tools directly
+- **Tool Management**: List, get, execute, update, delete, test, and track tool execution history
+- **Tool Versioning**: Manage tool versions and rollbacks
 - **Batch Operations**: Process multiple messages efficiently
-- **Document Collections**: Manage knowledge bases with vector search (gracefully handles unavailable endpoints)
-- **Skill Management**: List and retrieve available skills (gracefully handles unavailable endpoints)
+- **Document Collections**: Manage knowledge bases with vector search
+- **Chat with Documents**: Ask questions about uploaded documents
+- **Skill Management**: List and retrieve available skills
+- **Advanced Tool Features**: Test tools, track execution history, manage versions
 
 **Key Features**:
 - ✅ Real-time streaming with SSE parsing
@@ -501,11 +514,14 @@ The SDK is built with:
 - ✅ Agent management and discovery
 - ✅ Conversation with streaming support
 - ✅ Thread lifecycle management
-- ✅ Tool management and execution
+- ✅ Tool management (list, get, execute, update, delete, test)
+- ✅ Tool versioning and execution history
 - ✅ Run tracking and management
 - ✅ Document collections and search
+- ✅ Chat with documents (Q&A on uploaded docs)
 - ✅ Batch message processing
 - ✅ Graceful handling of unavailable endpoints
+- ✅ Modular code organization (config, client, types)
 
 ### Planned (watsonx.ai)
 - 🔄 Chat completion API

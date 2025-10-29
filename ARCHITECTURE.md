@@ -171,7 +171,7 @@ Dynamic model information fetched from WatsonX API.
 - `max_context_length` - Maximum context length
 - `available` - Availability status
 
-#### 7. `OrchestrateClient` (src/orchestrate_client.rs)
+#### 7. `OrchestrateClient` (src/orchestrate/client.rs)
 Client for WatsonX Orchestrate agent management and chat functionality.
 
 **Responsibilities:**
@@ -179,19 +179,23 @@ Client for WatsonX Orchestrate agent management and chat functionality.
 - Handle chat interactions with agents
 - Maintain conversation context (thread_id)
 - Parse Orchestrate-specific SSE events
+- Manage tools, threads, runs, and documents
 
 **Key Methods:**
 - `new()` - Create client from OrchestrateConfig
 - `list_agents()` - Discover available agents
 - `send_message()` - Send message and get response (non-streaming)
 - `stream_message()` - Send message with real-time streaming response
+- `update_tool()`, `delete_tool()`, `test_tool()` - Tool management
+- `get_tool_versions()`, `get_tool_execution_history()` - Tool tracking
+- `chat_with_docs()`, `stream_chat_with_docs()` - Document Q&A
 
 **Configuration:**
 - Simplified config (matching wxo-client-main pattern)
 - Only requires: `instance_id` and `region`
 - Loads from environment: `WXO_INSTANCE_ID`, `WXO_REGION`, `WATSONX_API_KEY`
 
-#### 8. `OrchestrateConfig` (src/orchestrate_types.rs)
+#### 8. `OrchestrateConfig` (src/orchestrate/config.rs)
 Simplified configuration for Watson Orchestrate operations.
 
 **Responsibilities:**
@@ -208,6 +212,21 @@ Simplified configuration for Watson Orchestrate operations.
 ```
 https://api.{region}.watson-orchestrate.cloud.ibm.com/instances/{instance_id}/v1/orchestrate
 ```
+
+#### 9. Orchestrate Module Structure (src/orchestrate/)
+Modular organization of Orchestrate functionality.
+
+**Module Organization:**
+- `mod.rs` - Module root and re-exports
+- `config.rs` - Configuration management
+- `client.rs` - Client implementation
+- `types.rs` - All types and data structures
+
+**Benefits:**
+- Clear separation of concerns
+- Easier to maintain and extend
+- Logical namespace hierarchy
+- Better code discoverability
 
 ## Data Flow
 
@@ -455,11 +474,16 @@ Returns score from 0.0 to 1.0
 - ✅ Flexible response parsing for API variations
 - ✅ Graceful degradation for unavailable endpoints (404 handling)
 - ✅ Optional Tool fields for compatibility with different API versions
-- ✅ Comprehensive examples (basic, chat, advanced, use cases)
+- ✅ Comprehensive examples (basic, chat, advanced, use cases, chat with documents)
 - ✅ Real-time streaming with proper SSE parsing
 - ✅ Thread-based conversation context management
 - ✅ Batch message processing support
-- ✅ Tool execution and management
+- ✅ Tool execution and management (execute, update, delete, test)
+- ✅ Tool versioning and execution history tracking
+- ✅ Chat with documents (Q&A on uploaded documents)
+- ✅ Modular code organization (config, client, types)
+- ✅ Bearer token authentication with X-Instance-ID headers
+- ✅ Multiple endpoint path fallbacks for robustness
 
 ### Robustness Features
 - Multiple response format support (direct arrays, wrapped objects)
@@ -467,6 +491,8 @@ Returns score from 0.0 to 1.0
 - Empty collection returns for unavailable endpoints (instead of errors)
 - Consistent error handling across all endpoints
 - Graceful degradation when optional features are unavailable
+- Multiple endpoint path attempts for better compatibility
+- Flexible document handling with fallback support
 
 ## Future Enhancements
 

@@ -53,8 +53,7 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod models;
-pub mod orchestrate_client;
-pub mod orchestrate_types;
+pub mod orchestrate;
 pub mod types;
 
 #[cfg(test)]
@@ -68,6 +67,7 @@ pub use client::WatsonxClient;
 pub use config::WatsonxConfig;
 pub use error::{Error, Result};
 pub use models::*;
-pub use orchestrate_client::OrchestrateClient;
-pub use orchestrate_types::{Agent, OrchestrateConfig, Message, MessagePayload, *};
+pub use orchestrate::OrchestrateClient;
+pub use orchestrate::{OrchestrateConfig, Agent, Message, MessagePayload};
+pub use orchestrate::*;
 pub use types::*;

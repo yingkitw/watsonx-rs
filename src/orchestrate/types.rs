@@ -7,50 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-/// Configuration for WatsonX Orchestrate operations
-/// Simplified to match wxo-client-main pattern - just needs instance_id
-#[derive(Clone, Debug)]
-pub struct OrchestrateConfig {
-    /// Instance ID for Watson Orchestrate (required)
-    pub instance_id: String,
-    /// Region (defaults to us-south, can be set via WXO_REGION env var)
-    pub region: String,
-}
-
-impl OrchestrateConfig {
-    /// Create configuration from environment variables
-    /// Reads: WXO_INSTANCE_ID (required), WXO_REGION (optional, defaults to us-south)
-    pub fn from_env() -> Result<Self, String> {
-        use std::env;
-        
-        let instance_id = env::var("WXO_INSTANCE_ID")
-            .map_err(|_| "WXO_INSTANCE_ID must be set in environment variables".to_string())?;
-        
-        let region = env::var("WXO_REGION")
-            .unwrap_or_else(|_| "us-south".to_string());
-        
-        Ok(Self {
-            instance_id,
-            region,
-        })
-    }
-
-    /// Create a new Orchestrate configuration with instance ID
-    pub fn new(instance_id: String) -> Self {
-        Self {
-            instance_id,
-            region: "us-south".to_string(),
-        }
-    }
-
-    /// Get the base URL (constructed from region and instance_id, matching wxo-client pattern)
-    pub fn get_base_url(&self) -> String {
-        format!(
-            "https://api.{}.watson-orchestrate.cloud.ibm.com/instances/{}/v1/orchestrate",
-            self.region, self.instance_id
-        )
-    }
-}
+// Re-export config from parent module
+pub use super::config::OrchestrateConfig;
 
 /// Simple Agent information (matches Watson Orchestrate API response)
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -731,6 +689,81 @@ pub struct ToolExecutionResult {
     pub error: Option<String>,
 }
 
+/// Tool update request
+#[derive(Clone, Debug, Serialize)]
+pub struct ToolUpdateRequest {
+    /// Tool name
+    pub name: Option<String>,
+    /// Tool description
+    pub description: Option<String>,
+    /// Tool configuration
+    pub config: Option<ToolConfig>,
+    /// Enable/disable tool
+    pub enabled: Option<bool>,
+    /// Tool metadata
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Tool version information
+#[derive(Clone, Debug, Deserialize)]
+pub struct ToolVersion {
+    /// Version ID
+    pub id: String,
+    /// Version number
+    pub version: String,
+    /// Created timestamp
+    pub created_at: Option<String>,
+    /// Updated timestamp
+    pub updated_at: Option<String>,
+    /// Version metadata
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Tool execution history entry
+#[derive(Clone, Debug, Deserialize)]
+pub struct ToolExecutionHistory {
+    /// Execution ID
+    pub id: String,
+    /// Tool ID
+    pub tool_id: String,
+    /// Execution status
+    pub status: String,
+    /// Execution timestamp
+    pub timestamp: Option<String>,
+    /// Execution time in milliseconds
+    pub execution_time_ms: Option<u64>,
+    /// Input parameters
+    pub input: Option<serde_json::Value>,
+    /// Result/output
+    pub output: Option<serde_json::Value>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+}
+
+/// Tool test request
+#[derive(Clone, Debug, Serialize)]
+pub struct ToolTestRequest {
+    /// Tool ID
+    pub tool_id: String,
+    /// Test input parameters
+    pub input: serde_json::Value,
+    /// Test metadata
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Tool test result
+#[derive(Clone, Debug, Deserialize)]
+pub struct ToolTestResult {
+    /// Test status (passed/failed)
+    pub status: String,
+    /// Test output
+    pub output: Option<serde_json::Value>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+    /// Execution time in milliseconds
+    pub execution_time_ms: Option<u64>,
+}
+
 /// Batch message request for multiple messages
 #[derive(Clone, Debug, Serialize)]
 pub struct BatchMessageRequest {
@@ -790,4 +823,45 @@ impl Default for AgentExecutionConfig {
             custom_params: HashMap::new(),
         }
     }
+}
+
+/// Request to chat with documents
+#[derive(Clone, Debug, Serialize)]
+pub struct ChatWithDocsRequest {
+    /// The message to send
+    pub message: String,
+    /// Document content or file reference
+    pub document_content: Option<String>,
+    /// Document file path or URL
+    pub document_path: Option<String>,
+    /// Additional context
+    pub context: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Response from chat with documents
+#[derive(Clone, Debug, Deserialize)]
+pub struct ChatWithDocsResponse {
+    /// The response message
+    pub message: String,
+    /// Document references used
+    pub documents_used: Option<Vec<String>>,
+    /// Confidence score
+    pub confidence: Option<f64>,
+    /// Additional metadata
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Status of chat with documents knowledge base
+#[derive(Clone, Debug, Deserialize)]
+pub struct ChatWithDocsStatus {
+    /// Status of the knowledge base (e.g., "ready", "processing", "error")
+    pub status: String,
+    /// Number of documents in knowledge base
+    pub document_count: Option<u32>,
+    /// Last update timestamp
+    pub last_updated: Option<String>,
+    /// Error message if status is error
+    pub error_message: Option<String>,
+    /// Additional metadata
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
