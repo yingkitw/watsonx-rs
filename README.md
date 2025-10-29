@@ -222,7 +222,16 @@ let config = GenerationConfig::default()
 
 ## ⚙️ WatsonX Orchestrate
 
-The SDK supports WatsonX Orchestrate for agent management and chat functionality (matching wxo-client pattern):
+The SDK provides comprehensive support for WatsonX Orchestrate with the following capabilities:
+
+### Core Features
+- **Agent Management**: List, get, and interact with agents
+- **Chat & Messaging**: Send messages and stream responses with thread management
+- **Thread Management**: List threads and retrieve conversation history
+- **Skills Management**: List and get skills available to agents
+- **Tools Management**: List and get tools available to agents
+- **Document Collections**: Create, manage, and search document collections
+- **Knowledge Base**: Build and query knowledge bases with vector search
 
 ### Quick Start - Chat with Agents
 
@@ -273,6 +282,51 @@ WATSONX_API_KEY=your-api-key  # or IAM_API_KEY or WO_API_KEY
 
 # Optional (defaults to us-south)
 WXO_REGION=us-south
+```
+
+### Additional Orchestrate Capabilities
+
+```rust
+use watsonx_rs::{OrchestrateClient, OrchestrateConfig, ThreadInfo};
+
+// Get specific agent details
+let agent = client.get_agent(&agent_id).await?;
+println!("Agent: {} ({})", agent.name, agent.agent_id);
+
+// List all threads (optionally filter by agent)
+let threads = client.list_threads(Some(&agent_id)).await?;
+for thread in threads {
+    println!("Thread: {} - {}", thread.thread_id, thread.title.unwrap_or_default());
+}
+
+// Get conversation history from a thread
+let messages = client.get_thread_messages(&thread_id).await?;
+for msg in messages {
+    println!("{}: {}", msg.role, msg.content);
+}
+
+// List available skills
+let skills = client.list_skills().await?;
+for skill in skills {
+    println!("Skill: {} - {}", skill.name, skill.id);
+}
+
+// List available tools
+let tools = client.list_tools().await?;
+for tool in tools {
+    println!("Tool: {} - {}", tool.name, tool.id);
+}
+
+// Get document collection details
+let collection = client.get_collection(&collection_id).await?;
+println!("Collection: {} ({} documents)", collection.name, collection.document_count);
+
+// Get specific document
+let document = client.get_document(&collection_id, &document_id).await?;
+println!("Document: {}", document.title);
+
+// Delete document
+client.delete_document(&collection_id, &document_id).await?;
 ```
 
 ### Document Collections & Knowledge Base
@@ -432,4 +486,4 @@ We welcome contributions! The SDK is designed to be extensible across the entire
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the Apache License 2.0.

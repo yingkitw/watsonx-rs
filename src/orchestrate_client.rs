@@ -5,10 +5,12 @@
 
 use crate::error::{Error, Result};
 use crate::orchestrate_types::*;
-use reqwest::Client;
+use futures::StreamExt;
+use reqwest::{Client, ClientBuilder};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// WatsonX Orchestrate client for managing custom assistants and document collections
@@ -21,7 +23,12 @@ pub struct OrchestrateClient {
 impl OrchestrateClient {
     /// Create a new Orchestrate client (matches wxo-client-main pattern)
     pub fn new(config: OrchestrateConfig) -> Self {
-        let client = Client::new();
+        let client = ClientBuilder::new()
+            .timeout(Duration::from_secs(300)) // 5 minute timeout for streaming
+            .tcp_keepalive(Duration::from_secs(60))
+            .http1_title_case_headers()
+            .build()
+            .unwrap_or_else(|_| Client::new());
 
         Self {
             config,
@@ -134,6 +141,124 @@ impl OrchestrateClient {
         Ok(agents)
     }
 
+    /// Get a specific agent by ID
+    pub async fn get_agent(&self, agent_id: &str) -> Result<Agent> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/agents/{}", base_url, agent_id);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get agent {}: {} - {}",
+                agent_id, status, error_text
+            )));
+        }
+
+        let agent: Agent = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(agent)
+    }
+
+    /// Get thread messages/history for a conversation
+    pub async fn get_thread_messages(&self, thread_id: &str) -> Result<Vec<Message>> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/threads/{}/messages", base_url, thread_id);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get thread messages {}: {} - {}",
+                thread_id, status, error_text
+            )));
+        }
+
+        let messages: Vec<Message> = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// List all threads for an agent
+    pub async fn list_threads(&self, agent_id: Option<&str>) -> Result<Vec<ThreadInfo>> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = if let Some(agent_id) = agent_id {
+            format!("{}/threads?agent_id={}", base_url, agent_id)
+        } else {
+            format!("{}/threads", base_url)
+        };
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to list threads: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let threads: Vec<ThreadInfo> = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(threads)
+    }
+
     /// Send a message to an agent and get response (matches wxo-client pattern)
     /// Uses /runs/stream endpoint and maintains thread_id for conversation continuity
     pub async fn send_message(&self, agent_id: &str, message: &str, thread_id: Option<String>) -> Result<(String, Option<String>)> {
@@ -244,6 +369,10 @@ impl OrchestrateClient {
             .post(&url)
             .header("IAM-API_KEY", api_key)
             .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .header("Connection", "keep-alive")
+            .header("X-Accel-Buffering", "no") // Disable proxy buffering
             .json(&payload)
             .send()
             .await
@@ -261,27 +390,121 @@ impl OrchestrateClient {
             )));
         }
 
-        // Process streaming response
-        let text = response.text().await.map_err(|e| Error::Network(e.to_string()))?;
+        // Process streaming response incrementally - process chunks as they arrive
+        // Use stream() to get real-time chunks with better control over buffering
+        let mut stream = response.bytes_stream();
+        let mut buffer = Vec::<u8>::new();
         let mut new_thread_id = thread_id;
+        let mut chunk_count = 0;
 
-        for line in text.lines() {
-            if !line.is_empty() {
-                if let Ok(event_data) = serde_json::from_str::<EventData>(&line) {
-                    // Look for message.delta events for streaming
-                    if event_data.event == "message.delta" {
-                        if let Some(data_obj) = event_data.data.as_object() {
-                            if let Some(delta_obj) = data_obj.get("delta") {
-                                if let Some(content_array) = delta_obj.get("content").and_then(|c| c.as_array()) {
+        // Process stream chunks in real-time - as each chunk arrives from the server
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.map_err(|e| Error::Network(e.to_string()))?;
+            chunk_count += 1;
+
+            // Small delay to simulate real-time processing and prevent buffering
+            if chunk_count > 1 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+            }
+
+            // Append chunk bytes to buffer
+            buffer.extend_from_slice(&chunk);
+
+            // Process all complete lines from buffer immediately - process ALL available lines
+            // Orchestrate SSE format: one JSON object per line (newline delimited)
+            loop {
+                // Find newline position in byte buffer
+                let newline_pos = buffer.iter().position(|&b| b == b'\n');
+
+                if let Some(newline_pos) = newline_pos {
+                    // Extract line bytes
+                    let line_bytes = buffer[..newline_pos].to_vec();
+                    // Remove processed line from buffer
+                    buffer = buffer[newline_pos + 1..].to_vec();
+
+                    // Convert to string (handle invalid UTF-8 gracefully)
+                    if let Ok(line) = String::from_utf8(line_bytes) {
+                        let trimmed = line.trim();
+
+                        if !trimmed.is_empty() {
+                            // Parse JSON event line - try to extract text delta immediately
+                            if let Ok(event_data) = serde_json::from_str::<EventData>(trimmed) {
+                                // Look for message.delta events for streaming
+                                if event_data.event == "message.delta" {
+                                    if let Some(data_obj) = event_data.data.as_object() {
+                                        // Try multiple paths to find the text content
+                                        // Path 1: data.delta.content[0].text (nested delta - primary)
+                                        if let Some(delta_obj) = data_obj.get("delta").and_then(|d| d.as_object()) {
+                                            if let Some(content_array) = delta_obj.get("content").and_then(|c| c.as_array()) {
+                                                if let Some(first_content) = content_array.first() {
+                                                    if let Some(text) = first_content.get("text").and_then(|t| t.as_str()) {
+                                                        callback(text.to_string())?;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Path 2: data.content[0].text (direct content - fallback)
+                                        else if let Some(content_array) = data_obj.get("content").and_then(|c| c.as_array()) {
+                                            if let Some(first_content) = content_array.first() {
+                                                if let Some(text) = first_content.get("text").and_then(|t| t.as_str()) {
+                                                    callback(text.to_string())?;
+                                                }
+                                            }
+                                        }
+                                        // Update thread_id if provided
+                                        if let Some(tid) = data_obj.get("thread_id").and_then(|t| t.as_str()) {
+                                            new_thread_id = Some(tid.to_string());
+                                        }
+                                    }
+                                }
+                                // Also look for message.created event to capture final thread_id
+                                else if event_data.event == "message.created" {
+                                    if let Some(data_obj) = event_data.data.as_object() {
+                                        if let Some(tid) = data_obj.get("thread_id").and_then(|t| t.as_str()) {
+                                            new_thread_id = Some(tid.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // No complete line yet - wait for more chunks
+                    break;
+                }
+            }
+        }
+
+        // Process any remaining buffer content (final partial line, if any)
+        if !buffer.is_empty() {
+            if let Ok(line) = String::from_utf8(buffer) {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    if let Ok(event_data) = serde_json::from_str::<EventData>(trimmed) {
+                        if event_data.event == "message.delta" {
+                            if let Some(data_obj) = event_data.data.as_object() {
+                                // Try multiple paths to find the text content
+                                // Path 1: data.delta.content[0].text (nested delta - primary)
+                                if let Some(delta_obj) = data_obj.get("delta").and_then(|d| d.as_object()) {
+                                    if let Some(content_array) = delta_obj.get("content").and_then(|c| c.as_array()) {
+                                        if let Some(first_content) = content_array.first() {
+                                            if let Some(text) = first_content.get("text").and_then(|t| t.as_str()) {
+                                                callback(text.to_string())?;
+                                            }
+                                        }
+                                    }
+                                }
+                                // Path 2: data.content[0].text (direct content - fallback)
+                                else if let Some(content_array) = data_obj.get("content").and_then(|c| c.as_array()) {
                                     if let Some(first_content) = content_array.first() {
                                         if let Some(text) = first_content.get("text").and_then(|t| t.as_str()) {
                                             callback(text.to_string())?;
                                         }
                                     }
                                 }
-                            }
-                            if let Some(tid) = data_obj.get("thread_id").and_then(|t| t.as_str()) {
-                                new_thread_id = Some(tid.to_string());
+                                if let Some(tid) = data_obj.get("thread_id").and_then(|t| t.as_str()) {
+                                    new_thread_id = Some(tid.to_string());
+                                }
                             }
                         }
                     }
@@ -799,6 +1022,280 @@ impl OrchestrateClient {
 
         Ok(())
     }
+
+    /// Get a specific document collection by ID
+    pub async fn get_collection(&self, collection_id: &str) -> Result<DocumentCollection> {
+        let access_token = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token first.".to_string())
+        })?;
+
+        let url = format!(
+            "{}/v1/collections/{}",
+            self.config.get_base_url(), collection_id
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get collection {}: {} - {}",
+                collection_id, status, error_text
+            )));
+        }
+
+        let collection: DocumentCollection = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(collection)
+    }
+
+    /// Get a specific document by ID from a collection
+    pub async fn get_document(&self, collection_id: &str, document_id: &str) -> Result<Document> {
+        let access_token = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token first.".to_string())
+        })?;
+
+        let url = format!(
+            "{}/v1/collections/{}/documents/{}",
+            self.config.get_base_url(), collection_id, document_id
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get document {} from collection {}: {} - {}",
+                document_id, collection_id, status, error_text
+            )));
+        }
+
+        let document: Document = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(document)
+    }
+
+    /// Delete a document from a collection
+    pub async fn delete_document(&self, collection_id: &str, document_id: &str) -> Result<()> {
+        let access_token = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token first.".to_string())
+        })?;
+
+        let url = format!(
+            "{}/v1/collections/{}/documents/{}",
+            self.config.get_base_url(), collection_id, document_id
+        );
+
+        let response = self
+            .client
+            .delete(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to delete document {} from collection {}: {} - {}",
+                document_id, collection_id, status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    // ============================================================================
+    // Skills Management
+    // ============================================================================
+
+    /// List all skills
+    pub async fn list_skills(&self) -> Result<Vec<Skill>> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/skills", base_url);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to list skills: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let skills: Vec<Skill> = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(skills)
+    }
+
+    /// Get a specific skill by ID
+    pub async fn get_skill(&self, skill_id: &str) -> Result<Skill> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/skills/{}", base_url, skill_id);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get skill {}: {} - {}",
+                skill_id, status, error_text
+            )));
+        }
+
+        let skill: Skill = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(skill)
+    }
+
+    // ============================================================================
+    // Tools Management
+    // ============================================================================
+
+    /// List all tools
+    pub async fn list_tools(&self) -> Result<Vec<Tool>> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/tools", base_url);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to list tools: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let tools: Vec<Tool> = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(tools)
+    }
+
+    /// Get a specific tool by ID
+    pub async fn get_tool(&self, tool_id: &str) -> Result<Tool> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/tools/{}", base_url, tool_id);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get tool {}: {} - {}",
+                tool_id, status, error_text
+            )));
+        }
+
+        let tool: Tool = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(tool)
+    }
 }
 
 // ============================================================================
@@ -831,6 +1328,3 @@ struct EventData {
     event: String,
     data: Value,
 }
-
-// Re-export futures for streaming
-use futures::StreamExt;

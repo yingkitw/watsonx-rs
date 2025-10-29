@@ -76,6 +76,16 @@
 - Created orchestrate_chat.rs for complete chat workflow demonstration
 - Added unit tests for all Orchestrate functionality
 
+## Recent Fixes
+
+✅ **Orchestrate Stream Parsing Fix (FINAL)**
+- Fixed `stream_message()` to correctly parse `message.delta` events
+- Corrected to access nested `data.delta.content[0].text` structure (primary path)
+- Added fallback to `data.content[0].text` for compatibility
+- Streaming callbacks now fire properly for each text delta received from API
+- Verified with real Watson Orchestrate API responses
+- Both main stream loop and remaining buffer processing updated
+
 ## Current Status
 
 The SDK is fully functional with:
@@ -92,10 +102,13 @@ The SDK is fully functional with:
 - ✅ Working examples with consistent method names
 
 ### WatsonX Orchestrate Features
-- ✅ Agent discovery (`list_agents()`)
+- ✅ Agent discovery (`list_agents()`, `get_agent()`)
 - ✅ Non-streaming chat with conversation continuity (`send_message()`)
 - ✅ Streaming chat with real-time callbacks (`stream_message()`)
-- ✅ Thread-based conversation context management
+- ✅ Thread management (`list_threads()`, `get_thread_messages()`)
+- ✅ Skills management (`list_skills()`, `get_skill()`)
+- ✅ Tools management (`list_tools()`, `get_tool()`)
+- ✅ Document collection operations (`get_collection()`, `get_document()`, `delete_document()`)
 - ✅ Simplified configuration (`from_env()` with just WXO_INSTANCE_ID and WXO_REGION)
 - ✅ Matches wxo-client-main pattern and API structure
 - ✅ Complete chat example (`orchestrate_chat.rs`)

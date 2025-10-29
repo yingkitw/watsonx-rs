@@ -440,6 +440,23 @@ pub struct MessagePayload {
     pub thread_id: Option<String>,
 }
 
+/// Thread information for conversation management
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ThreadInfo {
+    /// Thread ID
+    pub thread_id: String,
+    /// Agent ID associated with the thread
+    pub agent_id: Option<String>,
+    /// Thread title or summary
+    pub title: Option<String>,
+    /// Created timestamp
+    pub created_at: Option<String>,
+    /// Updated timestamp
+    pub updated_at: Option<String>,
+    /// Message count
+    pub message_count: Option<u32>,
+}
+
 /// Chat message for assistant conversations
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChatMessage {

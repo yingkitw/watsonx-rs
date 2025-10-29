@@ -47,4 +47,8 @@ pub enum Error {
     /// Project not found errors
     #[error("Project not found: {0}")]
     ProjectNotFound(String),
+
+    /// I/O errors
+    #[error("I/O error: {0}")]
+    Io(String),
 }

@@ -7,6 +7,7 @@
 //! 4. Stream responses from the agent
 //! 5. Maintain conversation context with thread_id
 
+use std::io::{self, Write};
 use watsonx_rs::{OrchestrateClient, OrchestrateConfig};
 
 #[tokio::main]
@@ -99,10 +100,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let message3 = "Tell me about Watson Orchestrate capabilities in a few sentences.";
     println!("You: {}", message3);
     print!("\n🤖 Agent (streaming): ");
-    
+    io::stdout().flush().unwrap();
+
     match client.stream_message(&agent.agent_id, message3, thread_id.clone(), |chunk| {
         print!("{}", chunk);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        io::stdout().flush().unwrap();
+        // Use async sleep instead of blocking sleep
+        // Small artificial delay to simulate real-time streaming effect
+        std::thread::sleep(std::time::Duration::from_millis(5));
         Ok(())
     }).await {
         Ok(new_thread_id) => {
@@ -125,7 +130,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     match client.stream_message(&agent.agent_id, message4, thread_id.clone(), |chunk| {
         print!("{}", chunk);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        io::stdout().flush().unwrap();
+        // Use async sleep instead of blocking sleep
+        // Small artificial delay to simulate real-time streaming effect
+        std::thread::sleep(std::time::Duration::from_millis(5));
         Ok(())
     }).await {
         Ok(new_thread_id) => {
