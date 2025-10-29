@@ -245,11 +245,14 @@ pub struct Tool {
     pub name: String,
     /// Tool description
     pub description: Option<String>,
-    /// Tool type
-    pub tool_type: ToolType,
-    /// Tool configuration
-    pub config: ToolConfig,
+    /// Tool type (optional - may not be in all API responses)
+    #[serde(default)]
+    pub tool_type: Option<ToolType>,
+    /// Tool configuration (optional - may not be in all API responses)
+    #[serde(default)]
+    pub config: Option<ToolConfig>,
     /// Whether tool is enabled
+    #[serde(default)]
     pub enabled: bool,
     /// Tool version
     pub version: Option<String>,
@@ -659,6 +662,132 @@ impl Default for OrchestrateRetryConfig {
             max_delay: Duration::from_secs(30),
             backoff_multiplier: 2.0,
             retry_on_errors: vec!["timeout".to_string(), "network_error".to_string()],
+        }
+    }
+}
+
+/// Run information for tracking agent execution
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RunInfo {
+    /// Run ID
+    pub run_id: String,
+    /// Associated thread ID
+    pub thread_id: String,
+    /// Associated agent ID
+    pub agent_id: Option<String>,
+    /// Run status
+    pub status: RunStatus,
+    /// Run start time
+    pub created_at: Option<String>,
+    /// Run completion time
+    pub completed_at: Option<String>,
+    /// Run metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// Run status enumeration
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum RunStatus {
+    /// Run is queued
+    #[serde(rename = "queued")]
+    Queued,
+    /// Run is in progress
+    #[serde(rename = "in_progress")]
+    InProgress,
+    /// Run completed successfully
+    #[serde(rename = "completed")]
+    Completed,
+    /// Run failed
+    #[serde(rename = "failed")]
+    Failed,
+    /// Run was cancelled
+    #[serde(rename = "cancelled")]
+    Cancelled,
+}
+
+/// Tool execution request
+#[derive(Clone, Debug, Serialize)]
+pub struct ToolExecutionRequest {
+    /// Tool ID
+    pub tool_id: String,
+    /// Tool parameters
+    pub parameters: HashMap<String, serde_json::Value>,
+    /// Execution context
+    pub context: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Tool execution result
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ToolExecutionResult {
+    /// Tool ID
+    pub tool_id: String,
+    /// Execution status
+    pub status: String,
+    /// Result data
+    pub result: serde_json::Value,
+    /// Execution time in milliseconds
+    pub execution_time_ms: Option<u64>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+}
+
+/// Batch message request for multiple messages
+#[derive(Clone, Debug, Serialize)]
+pub struct BatchMessageRequest {
+    /// Messages to process
+    pub messages: Vec<Message>,
+    /// Agent ID
+    pub agent_id: String,
+    /// Thread ID (optional)
+    pub thread_id: Option<String>,
+    /// Batch metadata
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Batch message response
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BatchMessageResponse {
+    /// Batch ID
+    pub batch_id: String,
+    /// Responses for each message
+    pub responses: Vec<BatchMessageResult>,
+    /// Batch metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// Individual batch message result
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BatchMessageResult {
+    /// Message index
+    pub message_index: usize,
+    /// Response message
+    pub response: String,
+    /// Processing time in milliseconds
+    pub processing_time_ms: Option<u64>,
+    /// Error (if any)
+    pub error: Option<String>,
+}
+
+/// Agent configuration for execution
+#[derive(Clone, Debug, Serialize)]
+pub struct AgentExecutionConfig {
+    /// Maximum execution time in seconds
+    pub max_execution_time: Option<u32>,
+    /// Enable tool use
+    pub enable_tools: bool,
+    /// Allowed tools (if empty, all tools allowed)
+    pub allowed_tools: Vec<String>,
+    /// Custom parameters
+    pub custom_params: HashMap<String, serde_json::Value>,
+}
+
+impl Default for AgentExecutionConfig {
+    fn default() -> Self {
+        Self {
+            max_execution_time: Some(300),
+            enable_tools: true,
+            allowed_tools: Vec::new(),
+            custom_params: HashMap::new(),
         }
     }
 }

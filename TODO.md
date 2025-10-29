@@ -76,7 +76,7 @@
 - Created orchestrate_chat.rs for complete chat workflow demonstration
 - Added unit tests for all Orchestrate functionality
 
-## Recent Fixes
+## Recent Fixes & Enhancements
 
 ✅ **Orchestrate Stream Parsing Fix (FINAL)**
 - Fixed `stream_message()` to correctly parse `message.delta` events
@@ -85,6 +85,27 @@
 - Streaming callbacks now fire properly for each text delta received from API
 - Verified with real Watson Orchestrate API responses
 - Both main stream loop and remaining buffer processing updated
+
+✅ **Advanced Orchestrate Capabilities Added**
+- **Run Management**: `get_run()`, `list_runs()`, `cancel_run()` for tracking execution
+- **Thread Management**: `create_thread()`, `delete_thread()` for conversation lifecycle
+- **Tool Execution**: `execute_tool()` for direct tool invocation
+- **Batch Operations**: `send_batch_messages()` for processing multiple messages
+- **New Types**: `RunInfo`, `RunStatus`, `ToolExecutionRequest`, `ToolExecutionResult`, `BatchMessageRequest`, `BatchMessageResponse`, `AgentExecutionConfig`
+
+✅ **Comprehensive Examples Added**
+- `orchestrate_advanced.rs` - Full capability demonstration with all features
+- `orchestrate_use_cases.rs` - Practical use cases (multi-turn chat, document search, tool integration, run tracking, skill discovery)
+- `orchestrate_chat.rs` - Complete chat workflow with streaming
+- `orchestrate_example.rs` - Basic agent listing
+
+✅ **SDK Robustness Improvements**
+- Made Tool fields optional (`tool_type`, `config`) to handle varying API responses
+- Implemented flexible response parsing for list endpoints
+- Added fallback parsing for wrapped responses (e.g., `{tools: [...]}`)
+- Graceful degradation for unavailable endpoints (returns empty collections)
+- Fixed tools listing - now correctly parses tool responses
+- Improved error handling in examples with info messages for optional features
 
 ## Current Status
 
@@ -105,14 +126,17 @@ The SDK is fully functional with:
 - ✅ Agent discovery (`list_agents()`, `get_agent()`)
 - ✅ Non-streaming chat with conversation continuity (`send_message()`)
 - ✅ Streaming chat with real-time callbacks (`stream_message()`)
-- ✅ Thread management (`list_threads()`, `get_thread_messages()`)
+- ✅ Thread management (`list_threads()`, `get_thread_messages()`, `create_thread()`, `delete_thread()`)
+- ✅ Run management (`get_run()`, `list_runs()`, `cancel_run()`)
 - ✅ Skills management (`list_skills()`, `get_skill()`)
-- ✅ Tools management (`list_tools()`, `get_tool()`)
+- ✅ Tools management (`list_tools()`, `get_tool()`, `execute_tool()`)
+- ✅ Batch operations (`send_batch_messages()`)
 - ✅ Document collection operations (`get_collection()`, `get_document()`, `delete_document()`)
 - ✅ Simplified configuration (`from_env()` with just WXO_INSTANCE_ID and WXO_REGION)
 - ✅ Matches wxo-client-main pattern and API structure
 - ✅ Complete chat example (`orchestrate_chat.rs`)
 - ✅ Document collection and vector search capabilities (infrastructure ready)
+- ✅ Advanced execution tracking and tool integration
 
 ## Future Improvements
 

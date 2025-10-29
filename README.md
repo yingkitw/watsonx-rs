@@ -426,7 +426,28 @@ cargo run --example orchestrate_example
 
 # Chat with agents - streaming and non-streaming
 cargo run --example orchestrate_chat
+
+# Advanced capabilities - comprehensive feature test
+cargo run --example orchestrate_advanced
+
+# Practical use cases - real-world scenarios
+cargo run --example orchestrate_use_cases
 ```
+
+### WatsonX Orchestrate Capabilities
+
+The SDK provides comprehensive support for Watson Orchestrate:
+
+- **Agent Management**: List and retrieve agents
+- **Conversation Management**: Send messages (streaming and non-streaming) with thread context
+- **Thread Management**: Create, list, and delete conversation threads
+- **Run Management**: Track and cancel agent executions
+- **Tool Management**: List tools, get tool details, and execute tools directly
+- **Batch Operations**: Process multiple messages efficiently
+- **Document Collections**: Manage knowledge bases with vector search
+- **Skill Management**: List and retrieve available skills
+
+See [ORCHESTRATE_CAPABILITIES.md](docs/ORCHESTRATE_CAPABILITIES.md) for detailed documentation.
 
 ## 🔧 Error Handling
 

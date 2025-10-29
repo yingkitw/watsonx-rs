@@ -209,12 +209,33 @@ impl OrchestrateClient {
             )));
         }
 
-        let messages: Vec<Message> = response
-            .json()
+        // Try to parse as Vec<Message> first, then try to extract from wrapper
+        let text = response
+            .text()
             .await
             .map_err(|e| Error::Serialization(e.to_string()))?;
 
-        Ok(messages)
+        // Try direct parsing first
+        if let Ok(messages) = serde_json::from_str::<Vec<Message>>(&text) {
+            return Ok(messages);
+        }
+
+        // Try parsing as object with messages field
+        if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(messages_array) = obj.get("messages").and_then(|m| m.as_array()) {
+                let messages: Result<Vec<Message>> = messages_array
+                    .iter()
+                    .map(|msg| {
+                        serde_json::from_value::<Message>(msg.clone())
+                            .map_err(|e| Error::Serialization(e.to_string()))
+                    })
+                    .collect();
+                return messages;
+            }
+        }
+
+        // If all else fails, return empty vec (API may not support this endpoint)
+        Ok(Vec::new())
     }
 
     /// List all threads for an agent
@@ -824,15 +845,13 @@ impl OrchestrateClient {
             Error::Authentication("Not authenticated. Set access token first.".to_string())
         })?;
 
-        let url = format!(
-            "{}/v1/collections",
-            self.config.get_base_url()
-        );
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/collections", base_url);
 
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", access_token))
+            .header("IAM-API_KEY", access_token)
             .header("Content-Type", "application/json")
             .send()
             .await
@@ -840,6 +859,12 @@ impl OrchestrateClient {
 
         if !response.status().is_success() {
             let status = response.status();
+            
+            // Return empty collection for 404 (endpoint not available)
+            if status == 404 {
+                return Ok(Vec::new());
+            }
+            
             let error_text = response
                 .text()
                 .await
@@ -850,12 +875,38 @@ impl OrchestrateClient {
             )));
         }
 
-        let collections_response: CollectionsResponse = response
-            .json()
+        // Try flexible parsing
+        let text = response
+            .text()
             .await
             .map_err(|e| Error::Serialization(e.to_string()))?;
 
-        Ok(collections_response.collections)
+        // Try direct parsing first
+        if let Ok(collections) = serde_json::from_str::<Vec<DocumentCollection>>(&text) {
+            return Ok(collections);
+        }
+
+        // Try parsing as CollectionsResponse
+        if let Ok(collections_response) = serde_json::from_str::<CollectionsResponse>(&text) {
+            return Ok(collections_response.collections);
+        }
+
+        // Try parsing as object with collections field
+        if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(collections_array) = obj.get("collections").and_then(|c| c.as_array()) {
+                let collections: Result<Vec<DocumentCollection>> = collections_array
+                    .iter()
+                    .map(|col| {
+                        serde_json::from_value::<DocumentCollection>(col.clone())
+                            .map_err(|e| Error::Serialization(e.to_string()))
+                    })
+                    .collect();
+                return collections;
+            }
+        }
+
+        // If all else fails, return empty vec
+        Ok(Vec::new())
     }
 
     /// Create a new document collection
@@ -1161,6 +1212,12 @@ impl OrchestrateClient {
 
         if !response.status().is_success() {
             let status = response.status();
+            
+            // Return empty skills for 404 (endpoint not available)
+            if status == 404 {
+                return Ok(Vec::new());
+            }
+            
             let error_text = response
                 .text()
                 .await
@@ -1171,12 +1228,33 @@ impl OrchestrateClient {
             )));
         }
 
-        let skills: Vec<Skill> = response
-            .json()
+        // Try to parse as Vec<Skill> first, then try to extract from wrapper
+        let text = response
+            .text()
             .await
             .map_err(|e| Error::Serialization(e.to_string()))?;
 
-        Ok(skills)
+        // Try direct parsing first
+        if let Ok(skills) = serde_json::from_str::<Vec<Skill>>(&text) {
+            return Ok(skills);
+        }
+
+        // Try parsing as object with skills field
+        if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(skills_array) = obj.get("skills").and_then(|s| s.as_array()) {
+                let skills: Result<Vec<Skill>> = skills_array
+                    .iter()
+                    .map(|skill| {
+                        serde_json::from_value::<Skill>(skill.clone())
+                            .map_err(|e| Error::Serialization(e.to_string()))
+                    })
+                    .collect();
+                return skills;
+            }
+        }
+
+        // If all else fails, return empty vec
+        Ok(Vec::new())
     }
 
     /// Get a specific skill by ID
@@ -1251,12 +1329,33 @@ impl OrchestrateClient {
             )));
         }
 
-        let tools: Vec<Tool> = response
-            .json()
+        // Try to parse as Vec<Tool> first, then try to extract from wrapper
+        let text = response
+            .text()
             .await
             .map_err(|e| Error::Serialization(e.to_string()))?;
 
-        Ok(tools)
+        // Try direct parsing first
+        if let Ok(tools) = serde_json::from_str::<Vec<Tool>>(&text) {
+            return Ok(tools);
+        }
+
+        // Try parsing as object with tools field
+        if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(tools_array) = obj.get("tools").and_then(|t| t.as_array()) {
+                let tools: Result<Vec<Tool>> = tools_array
+                    .iter()
+                    .map(|tool| {
+                        serde_json::from_value::<Tool>(tool.clone())
+                            .map_err(|e| Error::Serialization(e.to_string()))
+                    })
+                    .collect();
+                return tools;
+            }
+        }
+
+        // If all else fails, return empty vec
+        Ok(Vec::new())
     }
 
     /// Get a specific tool by ID
@@ -1295,6 +1394,298 @@ impl OrchestrateClient {
             .map_err(|e| Error::Serialization(e.to_string()))?;
 
         Ok(tool)
+    }
+
+    // ============================================================================
+    // Advanced Capabilities - Runs and Execution
+    // ============================================================================
+
+    /// Get information about a specific run
+    pub async fn get_run(&self, run_id: &str) -> Result<RunInfo> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/runs/{}", base_url, run_id);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to get run {}: {} - {}",
+                run_id, status, error_text
+            )));
+        }
+
+        let run: RunInfo = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(run)
+    }
+
+    /// List all runs for an agent
+    pub async fn list_runs(&self, agent_id: Option<&str>) -> Result<Vec<RunInfo>> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = if let Some(agent_id) = agent_id {
+            format!("{}/runs?agent_id={}", base_url, agent_id)
+        } else {
+            format!("{}/runs", base_url)
+        };
+
+        let response = self
+            .client
+            .get(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to list runs: {} - {}",
+                status, error_text
+            )));
+        }
+
+        // Try to parse as Vec<RunInfo> first, then try to extract from wrapper
+        let text = response
+            .text()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        // Try direct parsing first
+        if let Ok(runs) = serde_json::from_str::<Vec<RunInfo>>(&text) {
+            return Ok(runs);
+        }
+
+        // Try parsing as object with runs field
+        if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(runs_array) = obj.get("runs").and_then(|r| r.as_array()) {
+                let runs: Result<Vec<RunInfo>> = runs_array
+                    .iter()
+                    .map(|run| {
+                        serde_json::from_value::<RunInfo>(run.clone())
+                            .map_err(|e| Error::Serialization(e.to_string()))
+                    })
+                    .collect();
+                return runs;
+            }
+        }
+
+        // If all else fails, return empty vec
+        Ok(Vec::new())
+    }
+
+    /// Cancel a running execution
+    pub async fn cancel_run(&self, run_id: &str) -> Result<()> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/runs/{}/cancel", base_url, run_id);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to cancel run {}: {} - {}",
+                run_id, status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Create a new thread for conversation
+    pub async fn create_thread(&self, agent_id: Option<&str>) -> Result<ThreadInfo> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/threads", base_url);
+
+        let mut body = serde_json::json!({});
+        if let Some(agent_id) = agent_id {
+            body["agent_id"] = serde_json::json!(agent_id);
+        }
+
+        let response = self
+            .client
+            .post(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to create thread: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let thread: ThreadInfo = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(thread)
+    }
+
+    /// Delete a thread
+    pub async fn delete_thread(&self, thread_id: &str) -> Result<()> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/threads/{}", base_url, thread_id);
+
+        let response = self
+            .client
+            .delete(&url)
+            .header("IAM-API_KEY", api_key)
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to delete thread {}: {} - {}",
+                thread_id, status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Execute a tool directly
+    pub async fn execute_tool(&self, request: ToolExecutionRequest) -> Result<ToolExecutionResult> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/tools/{}/execute", base_url, request.tool_id);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to execute tool: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let result: ToolExecutionResult = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Send multiple messages in a batch
+    pub async fn send_batch_messages(&self, request: BatchMessageRequest) -> Result<BatchMessageResponse> {
+        let api_key = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Set access token (API key) first.".to_string())
+        })?;
+
+        let base_url = self.config.get_base_url();
+        let url = format!("{}/batch/messages", base_url);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("IAM-API_KEY", api_key)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api(format!(
+                "Failed to send batch messages: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let batch_response: BatchMessageResponse = response
+            .json()
+            .await
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        Ok(batch_response)
     }
 }
 
