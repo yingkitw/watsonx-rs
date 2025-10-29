@@ -43,6 +43,11 @@
 - Emphasized WatsonX platform vision (ai, data, governance, orchestrate)
 - Created pattern-based learning approach instead of API reference style
 
+✅ **Crates.io Publishing Fix**
+- Fixed Cargo.toml categories to use supported crates.io category slugs
+- Removed unsupported "artificial-intelligence" category
+- Updated to use "api-bindings", "web-programming", "text-processing"
+
 ## Current Status
 
 The SDK is fully functional with:
