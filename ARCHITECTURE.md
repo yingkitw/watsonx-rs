@@ -449,6 +449,25 @@ Returns score from 0.0 to 1.0
 - Quality assessment results
 - Model constants
 
+## Orchestrate SDK Enhancements (Latest)
+
+### Recent Improvements
+- ✅ Flexible response parsing for API variations
+- ✅ Graceful degradation for unavailable endpoints (404 handling)
+- ✅ Optional Tool fields for compatibility with different API versions
+- ✅ Comprehensive examples (basic, chat, advanced, use cases)
+- ✅ Real-time streaming with proper SSE parsing
+- ✅ Thread-based conversation context management
+- ✅ Batch message processing support
+- ✅ Tool execution and management
+
+### Robustness Features
+- Multiple response format support (direct arrays, wrapped objects)
+- Fallback parsing strategies for API variations
+- Empty collection returns for unavailable endpoints (instead of errors)
+- Consistent error handling across all endpoints
+- Graceful degradation when optional features are unavailable
+
 ## Future Enhancements
 
 ### Potential Improvements
@@ -456,10 +475,10 @@ Returns score from 0.0 to 1.0
 - Token caching with expiration
 - Retry logic with exponential backoff
 - Metrics and observability
-- Batch request support
 - Enhanced document collection features (full CRUD operations)
 - Session management abstraction (thread_id management)
 - WebSocket support for Orchestrate (if available)
+- Advanced streaming control options
 
 ### Architecture Considerations
 - Keep client lightweight and simple
@@ -469,4 +488,5 @@ Returns score from 0.0 to 1.0
 - Maintain streaming as primary interface for real-time features
 - Follow established patterns (wxo-client-main, WatsonX API conventions)
 - Keep configuration simple (environment-based, minimal fields)
+- Prioritize graceful degradation over strict error handling
 

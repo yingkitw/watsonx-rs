@@ -436,7 +436,7 @@ cargo run --example orchestrate_use_cases
 
 ### WatsonX Orchestrate Capabilities
 
-The SDK provides comprehensive support for Watson Orchestrate:
+The SDK provides comprehensive support for Watson Orchestrate with robust error handling and graceful degradation:
 
 - **Agent Management**: List and retrieve agents
 - **Conversation Management**: Send messages (streaming and non-streaming) with thread context
@@ -444,10 +444,17 @@ The SDK provides comprehensive support for Watson Orchestrate:
 - **Run Management**: Track and cancel agent executions
 - **Tool Management**: List tools, get tool details, and execute tools directly
 - **Batch Operations**: Process multiple messages efficiently
-- **Document Collections**: Manage knowledge bases with vector search
-- **Skill Management**: List and retrieve available skills
+- **Document Collections**: Manage knowledge bases with vector search (gracefully handles unavailable endpoints)
+- **Skill Management**: List and retrieve available skills (gracefully handles unavailable endpoints)
 
-See [ORCHESTRATE_CAPABILITIES.md](docs/ORCHESTRATE_CAPABILITIES.md) for detailed documentation.
+**Key Features**:
+- ✅ Real-time streaming with SSE parsing
+- ✅ Flexible response parsing for API variations
+- ✅ Graceful degradation for unavailable endpoints
+- ✅ Comprehensive error handling
+- ✅ Thread-based conversation context
+
+See [ORCHESTRATE_CAPABILITIES.md](docs/ORCHESTRATE_CAPABILITIES.md) for detailed documentation and [TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for testing instructions.
 
 ## 🔧 Error Handling
 
@@ -490,6 +497,16 @@ The SDK is built with:
 - ✅ Quality assessment
 - ✅ Configuration management
 
+### Current (watsonx.orchestrate)
+- ✅ Agent management and discovery
+- ✅ Conversation with streaming support
+- ✅ Thread lifecycle management
+- ✅ Tool management and execution
+- ✅ Run tracking and management
+- ✅ Document collections and search
+- ✅ Batch message processing
+- ✅ Graceful handling of unavailable endpoints
+
 ### Planned (watsonx.ai)
 - 🔄 Chat completion API
 - 🔄 Embeddings generation
@@ -499,7 +516,6 @@ The SDK is built with:
 ### Future (Full WatsonX Platform)
 - 📊 **watsonx.data**: Data ingestion, processing, analytics
 - 🛡️ **watsonx.governance**: Model governance, bias detection
-- ⚙️ **watsonx.orchestrate**: Workflow automation, pipeline management
 
 ## 🤝 Contributing
 

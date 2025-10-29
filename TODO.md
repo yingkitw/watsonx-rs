@@ -107,6 +107,14 @@
 - Fixed tools listing - now correctly parses tool responses
 - Improved error handling in examples with info messages for optional features
 
+✅ **Endpoint Availability Handling**
+- Fixed `list_collections()` endpoint URL (changed from `/v1/collections` to `/collections`)
+- Fixed `list_collections()` auth header (changed from Bearer token to `IAM-API_KEY`)
+- Added 404 handling for `list_collections()` - returns empty collection gracefully
+- Added 404 handling for `list_skills()` - returns empty collection gracefully
+- Updated examples to show "endpoint may not be enabled" for unavailable endpoints
+- All use cases now complete successfully even when optional endpoints are unavailable
+
 ## Current Status
 
 The SDK is fully functional with:
@@ -131,12 +139,15 @@ The SDK is fully functional with:
 - ✅ Skills management (`list_skills()`, `get_skill()`)
 - ✅ Tools management (`list_tools()`, `get_tool()`, `execute_tool()`)
 - ✅ Batch operations (`send_batch_messages()`)
-- ✅ Document collection operations (`get_collection()`, `get_document()`, `delete_document()`)
+- ✅ Document collection operations (`list_collections()`, `get_collection()`, `get_document()`, `delete_document()`)
 - ✅ Simplified configuration (`from_env()` with just WXO_INSTANCE_ID and WXO_REGION)
 - ✅ Matches wxo-client-main pattern and API structure
 - ✅ Complete chat example (`orchestrate_chat.rs`)
 - ✅ Document collection and vector search capabilities (infrastructure ready)
 - ✅ Advanced execution tracking and tool integration
+- ✅ Graceful handling of unavailable endpoints (404 errors)
+- ✅ Flexible response parsing for API variations
+- ✅ Comprehensive examples (basic, chat, advanced, use cases)
 
 ## Future Improvements
 
