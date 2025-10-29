@@ -48,6 +48,13 @@
 - Removed unsupported "artificial-intelligence" category
 - Updated to use "api-bindings", "web-programming", "text-processing"
 
+✅ **Build Size Optimization**
+- Removed unnecessary dependencies (anyhow, async-trait, url)
+- Optimized Tokio features to only essential ones (rt, rt-multi-thread, net, time, macros)
+- Disabled reqwest default features and enabled only needed ones
+- Added release profile optimizations (opt-level = "z", lto = true, strip = true)
+- Reduced library size to 617KB and example binary to 1.7MB
+
 ## Current Status
 
 The SDK is fully functional with:
