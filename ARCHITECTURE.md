@@ -2,19 +2,26 @@
 
 ## Overview
 
-WatsonX-RS is a Rust SDK for IBM WatsonX AI platform, providing a high-level interface for text generation with streaming support. The architecture emphasizes:
+WatsonX-RS is a Rust SDK for IBM WatsonX AI platform, providing high-level interfaces for:
+- **watsonx.ai**: Text generation with streaming support
+- **watsonx.orchestrate**: Agent management and chat functionality
+
+The architecture emphasizes:
 
 - **Async/Await**: Full async support with Tokio
 - **Streaming**: Real-time Server-Sent Events (SSE) processing
 - **Security**: Environment-based configuration
 - **Type Safety**: Strong typing throughout
 - **Error Handling**: Comprehensive error types
+- **Simplicity**: Following wxo-client-main patterns for consistency
 
 ## Architecture Diagram
 
 ```mermaid
 graph TB
     A[User Application] --> B[WatsonxClient]
+    A --> O[OrchestrateClient]
+    
     B --> C[WatsonxConfig]
     B --> D[Authentication]
     B --> E[Generation API]
@@ -34,9 +41,26 @@ graph TB
     
     B --> N[Quality Assessment]
     
+    O --> P[OrchestrateConfig]
+    O --> Q[Agent API]
+    O --> R[Chat API]
+    
+    P --> F
+    P --> S[Instance ID + Region]
+    
+    Q --> T[/agents endpoint]
+    R --> U[/runs/stream endpoint]
+    
+    U --> V[Orchestrate SSE Parser]
+    V --> W[Event Parser]
+    W --> X[message.created/delta]
+    X --> A
+    
     style B fill:#e1f5ff
+    style O fill:#ffe1f5
     style J fill:#fff4e1
     style L fill:#e8f5e9
+    style V fill:#e8f5e9
 ```
 
 ## Component Architecture
@@ -147,6 +171,44 @@ Dynamic model information fetched from WatsonX API.
 - `max_context_length` - Maximum context length
 - `available` - Availability status
 
+#### 7. `OrchestrateClient` (src/orchestrate_client.rs)
+Client for WatsonX Orchestrate agent management and chat functionality.
+
+**Responsibilities:**
+- Manage agent discovery and selection
+- Handle chat interactions with agents
+- Maintain conversation context (thread_id)
+- Parse Orchestrate-specific SSE events
+
+**Key Methods:**
+- `new()` - Create client from OrchestrateConfig
+- `list_agents()` - Discover available agents
+- `send_message()` - Send message and get response (non-streaming)
+- `stream_message()` - Send message with real-time streaming response
+
+**Configuration:**
+- Simplified config (matching wxo-client-main pattern)
+- Only requires: `instance_id` and `region`
+- Loads from environment: `WXO_INSTANCE_ID`, `WXO_REGION`, `WATSONX_API_KEY`
+
+#### 8. `OrchestrateConfig` (src/orchestrate_types.rs)
+Simplified configuration for Watson Orchestrate operations.
+
+**Responsibilities:**
+- Load configuration from environment variables
+- Construct base URL from instance_id and region
+- Provide defaults (region defaults to "us-south")
+
+**Environment Variables:**
+- `WXO_INSTANCE_ID` - Watson Orchestrate instance ID (required)
+- `WXO_REGION` - Region (optional, defaults to "us-south")
+- `WATSONX_API_KEY` - API key for authentication (or `IAM_API_KEY`, `WO_API_KEY`)
+
+**Base URL Construction:**
+```
+https://api.{region}.watson-orchestrate.cloud.ibm.com/instances/{instance_id}/v1/orchestrate
+```
+
 ## Data Flow
 
 ### Streaming Generation Flow
@@ -213,6 +275,46 @@ sequenceDiagram
     Client->>Client: Store token
 ```
 
+### Orchestrate Chat Flow (Non-streaming)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant API
+    
+    User->>Client: send_message(agent_id, message, thread_id?)
+    Client->>API: POST /runs/stream with MessagePayload
+    Note over Client,API: IAM-API_KEY header
+    API-->>Client: SSE stream with events
+    loop Parse SSE events
+        Client->>Client: Parse message.created event
+        Client->>Client: Extract response text and thread_id
+    end
+    Client-->>User: (response, new_thread_id)
+```
+
+### Orchestrate Chat Flow (Streaming)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant API
+    
+    User->>Client: stream_message(agent_id, message, thread_id?, callback)
+    Client->>API: POST /runs/stream with MessagePayload
+    Note over Client,API: IAM-API_KEY header
+    API-->>Client: SSE stream with events
+    loop Parse SSE events
+        Client->>Client: Parse message.delta events
+        Client->>Client: Extract incremental text chunks
+        Client->>User: Callback with each chunk (real-time)
+        Client->>Client: Track thread_id from events
+    end
+    Client-->>User: new_thread_id (for conversation continuity)
+```
+
 ## SSE Parsing
 
 The SDK implements proper Server-Sent Events parsing for streaming responses:
@@ -235,6 +337,28 @@ data: [DONE]
 6. Extract generated text from results
 7. Call callback with each chunk
 8. Accumulate total response
+
+### Orchestrate SSE Event Parsing
+
+The Orchestrate client parses Orchestrate-specific SSE events:
+
+**Event Types:**
+- `message.created` - Final complete message (for non-streaming)
+- `message.delta` - Incremental text chunks (for streaming)
+
+**Format:**
+```
+{"event":"message.created","data":{"message":{"content":[{"text":"Full response"}],"thread_id":"..."}}}
+{"event":"message.delta","data":{"delta":{"content":[{"text":"chunk1"}]},"thread_id":"..."}}
+{"event":"message.delta","data":{"delta":{"content":[{"text":"chunk2"}]},"thread_id":"..."}}
+```
+
+**Parsing Logic:**
+1. Read SSE stream line by line
+2. Parse JSON event data
+3. For `message.created`: Extract full response text and thread_id
+4. For `message.delta`: Extract incremental chunks and call callback
+5. Maintain thread_id for conversation continuity
 
 ## Error Handling Strategy
 
@@ -328,17 +452,21 @@ Returns score from 0.0 to 1.0
 ## Future Enhancements
 
 ### Potential Improvements
-- Connection pooling
+- Connection pooling for better performance
 - Token caching with expiration
-- Retry logic with backoff
+- Retry logic with exponential backoff
 - Metrics and observability
 - Batch request support
-- Chat completion API support
+- Enhanced document collection features (full CRUD operations)
+- Session management abstraction (thread_id management)
+- WebSocket support for Orchestrate (if available)
 
 ### Architecture Considerations
-- Keep client lightweight
+- Keep client lightweight and simple
 - Maintain async-first design
 - Preserve type safety
 - Keep error handling comprehensive
-- Maintain streaming as primary interface
+- Maintain streaming as primary interface for real-time features
+- Follow established patterns (wxo-client-main, WatsonX API conventions)
+- Keep configuration simple (environment-based, minimal fields)
 

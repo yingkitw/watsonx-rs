@@ -11,7 +11,7 @@ This SDK aims to provide comprehensive support for the entire IBM WatsonX ecosys
 - **🛡️ watsonx.governance** - AI governance and compliance
 - **⚙️ watsonx.orchestrate** - Workflow orchestration and automation
 
-Currently, we focus on `watsonx.ai` with text generation capabilities, but the architecture is designed to expand across all WatsonX services.
+Currently, we support both `watsonx.ai` (text generation) and `watsonx.orchestrate` (custom assistants and document management), with the architecture designed to expand across all WatsonX services.
 
 ## 🚀 Quick Start
 
@@ -220,9 +220,135 @@ let config = GenerationConfig::default()
 - ✅ Processing long responses incrementally
 - ✅ Building streaming APIs
 
+## ⚙️ WatsonX Orchestrate
+
+The SDK supports WatsonX Orchestrate for agent management and chat functionality (matching wxo-client pattern):
+
+### Quick Start - Chat with Agents
+
+```rust
+use watsonx_rs::{OrchestrateClient, OrchestrateConfig};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load config from environment (WXO_INSTANCE_ID, WXO_REGION, WATSONX_API_KEY)
+    let config = OrchestrateConfig::from_env()?;
+    let client = OrchestrateClient::new(config).with_token("your-api-key".to_string());
+    
+    // List available agents
+    let agents = client.list_agents().await?;
+    let agent = &agents[0];
+    
+    // Send a message (non-streaming)
+    let (response, thread_id) = client.send_message(&agent.agent_id, "Hello!", None).await?;
+    println!("Agent: {}", response);
+    
+    // Continue conversation with context
+    let (response2, _) = client.send_message(
+        &agent.agent_id, 
+        "What can you help me with?", 
+        thread_id
+    ).await?;
+    println!("Agent: {}", response2);
+    
+    // Stream responses
+    client.stream_message(&agent.agent_id, "Tell me a story", None, |chunk| {
+        print!("{}", chunk);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        Ok(())
+    }).await?;
+    
+    Ok(())
+}
+```
+
+### Environment Setup for Orchestrate
+
+Create a `.env` file with:
+
+```bash
+# Required
+WXO_INSTANCE_ID=your-instance-id
+WATSONX_API_KEY=your-api-key  # or IAM_API_KEY or WO_API_KEY
+
+# Optional (defaults to us-south)
+WXO_REGION=us-south
+```
+
+### Document Collections & Knowledge Base
+
+```rust
+use watsonx_rs::{
+    OrchestrateClient, CreateCollectionRequest, VectorIndexConfig, IndexType, SimilarityMetric,
+    AddDocumentsRequest, Document, DocumentType, SearchRequest
+};
+use std::collections::HashMap;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = OrchestrateConfig::new("your-project-id".to_string());
+    let client = OrchestrateClient::new(config).with_token("your-api-key".to_string());
+    
+    // Create a document collection
+    let vector_config = VectorIndexConfig {
+        id: "docs-index".to_string(),
+        embedding_model: "sentence-transformers/all-MiniLM-L6-v2".to_string(),
+        dimensions: 384,
+        index_type: IndexType::Hnsw,
+        similarity_metric: SimilarityMetric::Cosine,
+    };
+    
+    let collection_request = CreateCollectionRequest {
+        name: "Documentation".to_string(),
+        description: Some("Technical documentation collection".to_string()),
+        vector_index: Some(vector_config),
+    };
+    
+    let collection = client.create_collection(collection_request).await?;
+    
+    // Add documents
+    let documents = vec![
+        Document {
+            id: "doc-1".to_string(),
+            title: "Rust Basics".to_string(),
+            content: "Rust is a systems programming language...".to_string(),
+            metadata: HashMap::new(),
+            document_type: DocumentType::Text,
+            created_at: None,
+            updated_at: None,
+            embedding: None,
+        }
+    ];
+    
+    let add_request = AddDocumentsRequest {
+        documents,
+        async_processing: false,
+    };
+    
+    client.add_documents(&collection.id, add_request).await?;
+    
+    // Search documents
+    let search_request = SearchRequest {
+        query: "Rust programming".to_string(),
+        limit: Some(5),
+        threshold: Some(0.7),
+        filters: None,
+    };
+    
+    let results = client.search_documents(&collection.id, search_request).await?;
+    for result in results.results {
+        println!("Found: {} (score: {:.3})", result.title, result.similarity_score);
+    }
+    
+    Ok(())
+}
+```
+
 ## 📚 Examples
 
 Run these examples to see the SDK in action:
+
+### WatsonX AI Examples
 
 ```bash
 # Basic streaming generation
@@ -236,6 +362,16 @@ cargo run --example list_models
 
 # Use predefined model constants
 cargo run --example model_constants
+```
+
+### WatsonX Orchestrate Examples
+
+```bash
+# Basic Orchestrate - list agents
+cargo run --example orchestrate_example
+
+# Chat with agents - streaming and non-streaming
+cargo run --example orchestrate_chat
 ```
 
 ## 🔧 Error Handling

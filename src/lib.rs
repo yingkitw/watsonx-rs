@@ -3,7 +3,8 @@
 //! An unofficial Rust SDK for IBM WatsonX AI platform.
 //!
 //! This crate provides a high-level interface to interact with IBM WatsonX AI services,
-//! including text generation, streaming responses, and model management.
+//! including text generation, streaming responses, model management, and WatsonX Orchestrate
+//! custom assistants and document collections.
 //!
 //! ## Features
 //!
@@ -13,6 +14,9 @@
 //! - **Error Handling**: Comprehensive error types and handling
 //! - **Async/Await**: Full async support with Tokio
 //! - **Configuration**: Flexible configuration options
+//! - **WatsonX Orchestrate**: Custom assistant management and document collections
+//! - **Chat Functionality**: Interactive chat with custom assistants
+//! - **Document Management**: Vector search and knowledge base management
 //!
 //! ## Quick Start
 //!
@@ -49,14 +53,21 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod models;
+pub mod orchestrate_client;
+pub mod orchestrate_types;
 pub mod types;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod orchestrate_tests;
 
 // Re-export main types for convenience
 pub use client::WatsonxClient;
 pub use config::WatsonxConfig;
 pub use error::{Error, Result};
 pub use models::*;
+pub use orchestrate_client::OrchestrateClient;
+pub use orchestrate_types::{Agent, OrchestrateConfig, Message, MessagePayload, *};
 pub use types::*;

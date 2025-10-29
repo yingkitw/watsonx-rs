@@ -60,18 +60,46 @@
 - Added exclusions for build artifacts, IDE files, OS files, and temporary data
 - Included environment variable files and profiling data exclusions
 
+✅ **WatsonX Orchestrate SDK Implementation**
+- Implemented comprehensive OrchestrateClient matching wxo-client-main pattern
+- Simplified OrchestrateConfig (only instance_id and region, removed api_url and timeout)
+- Added `list_agents()` method for agent discovery
+- Implemented `send_message()` for non-streaming chat with conversation continuity
+- Implemented `stream_message()` for real-time streaming chat responses
+- Uses `/runs/stream` endpoint matching wxo-client pattern
+- Parses SSE events (message.created, message.delta) correctly
+- Maintains thread_id for conversation context
+- Added support for document collections and vector search capabilities
+- Created comprehensive type definitions (Agent, Message, MessagePayload, etc.)
+- Added `from_env()` method for simple environment-based configuration
+- Created orchestrate_example.rs for basic agent listing
+- Created orchestrate_chat.rs for complete chat workflow demonstration
+- Added unit tests for all Orchestrate functionality
+
 ## Current Status
 
 The SDK is fully functional with:
+
+### WatsonX AI Features
 - ✅ Real-time streaming text generation (`generate_text_stream()`)
 - ✅ Standard text generation (`generate_text()`)
 - ✅ Proper SSE parsing for WatsonX streaming endpoint
 - ✅ Environment-based configuration
 - ✅ Multiple model support with updated constants
-- ✅ Model listing API integration
+- ✅ Model listing API integration (`list_models()`)
 - ✅ Quality assessment tools
 - ✅ Comprehensive error handling
 - ✅ Working examples with consistent method names
+
+### WatsonX Orchestrate Features
+- ✅ Agent discovery (`list_agents()`)
+- ✅ Non-streaming chat with conversation continuity (`send_message()`)
+- ✅ Streaming chat with real-time callbacks (`stream_message()`)
+- ✅ Thread-based conversation context management
+- ✅ Simplified configuration (`from_env()` with just WXO_INSTANCE_ID and WXO_REGION)
+- ✅ Matches wxo-client-main pattern and API structure
+- ✅ Complete chat example (`orchestrate_chat.rs`)
+- ✅ Document collection and vector search capabilities (infrastructure ready)
 
 ## Future Improvements
 
@@ -105,8 +133,16 @@ The SDK is fully functional with:
 
 ## Notes
 
-- The SDK currently uses the streaming endpoint (`text/generation_stream`) for all generation requests
+### WatsonX AI (watsonx.ai)
+- Supports both streaming (`generate_text_stream`) and non-streaming (`generate_text`) endpoints
 - Authentication tokens are not cached (re-authenticates on each connection)
-- All examples follow the streaming pattern for real-time output
 - Configuration is primarily via `.env` files for security
+
+### WatsonX Orchestrate (watsonx.orchestrate)
+- Simplified configuration following wxo-client-main pattern (only instance_id and region)
+- Uses `/runs/stream` endpoint for all chat interactions (matches wxo-client)
+- Supports both streaming (`stream_message`) and non-streaming (`send_message`) chat
+- Maintains conversation context via thread_id (returned and managed by caller)
+- Uses `IAM-API_KEY` header authentication (not Bearer token)
+- Parses Orchestrate-specific SSE events (message.created, message.delta)
 
