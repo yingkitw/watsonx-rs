@@ -17,6 +17,8 @@ codegen-units = 1            # Better optimization (slower compilation)
 panic = "abort"              # Smaller panic handling
 strip = true                 # Remove debug symbols
 split-debuginfo = "packed"   # Smaller debug info
+debug = false                # No debug info in release
+incremental = false          # Disable incremental compilation for smaller size
 ```
 
 #### Minimal Profile (Ultra-compact)
@@ -29,6 +31,8 @@ codegen-units = 1
 panic = "abort"
 strip = true
 split-debuginfo = "packed"
+debug = false
+incremental = false
 ```
 
 ### 2. Dependency Optimization
@@ -42,20 +46,28 @@ split-debuginfo = "packed"
 - Enabled only: `json`, `stream`, `rustls-tls-native-roots`
 - Uses rustls instead of native-tls for smaller footprint
 
+**Futures optimization:**
+- Disabled default features
+- Enabled only: `std`, `async-await` (minimal features needed)
+
 **UUID optimization:**
 - Added `serde` feature for serialization support
 
+**Optional dotenv support:**
+- Made `dotenvy` optional via feature flag
+- Default feature includes dotenv for convenience
+- Can be disabled with `--no-default-features` for minimal builds
+
 ### 3. .cargo/config.toml
 
-Platform-specific optimizations and convenient build aliases:
+Additional linker optimizations and convenient build aliases:
 
 ```toml
-[build]
-jobs = 0  # Use all available CPU cores
-
-[target.x86_64-apple-darwin]
+# Additional size optimizations via rustflags
+[target.'cfg(not(debug_assertions))']
 rustflags = [
-    "-C", "target-cpu=native",  # Optimize for current CPU
+    "-C", "link-arg=-Wl,--gc-sections",  # Remove unused sections
+    "-C", "link-arg=-Wl,--strip-all",    # Strip all symbols
 ]
 
 [alias]
@@ -64,11 +76,16 @@ build-minimal = "build --release --profile minimal"
 check-all = "check --all-targets"
 ```
 
+**Linker optimizations:**
+- `--gc-sections`: Removes unused code sections
+- `--strip-all`: Strips all symbols for minimal size
+
 ## Build Size Results
 
 ### Library Size
-- **Release build**: 3.0 MB (stripped)
-- **Minimal build**: ~2.8 MB (ultra-optimized)
+- **Release build**: 3.1 MB (stripped, with all optimizations)
+- **Minimal build**: 3.1 MB (ultra-optimized)
+- **Without dotenv feature**: 3.1 MB (minimal difference, dotenv is small)
 
 ### Build Times
 - **Release**: ~17-20 seconds (first build)
@@ -88,6 +105,12 @@ cargo build-release
 cargo build --release --profile minimal
 # or
 cargo build-minimal
+```
+
+### Build Without Optional Features
+```bash
+# Build without dotenv support (slightly smaller)
+cargo build --release --no-default-features
 ```
 
 ### Check All Targets

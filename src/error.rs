@@ -6,7 +6,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors that can occur when using WatsonX-RS
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum Error {
     /// Network-related errors
     #[error("Network error: {0}")]

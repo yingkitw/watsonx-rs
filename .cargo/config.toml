@@ -1,17 +1,14 @@
-# Cargo configuration for optimized builds
+# Build configuration
+# Note: jobs = 0 is not valid, cargo uses all cores by default
 
-[build]
-# Parallel compilation (default is number of CPU cores)
-
-[target.x86_64-apple-darwin]
-# macOS specific optimizations
+# Additional size optimizations via rustflags
+[target.'cfg(not(debug_assertions))']
 rustflags = [
-    "-C", "link-arg=-fuse-ld=lld",  # Use faster linker if available
-    "-C", "target-cpu=native",       # Optimize for current CPU
+    "-C", "link-arg=-Wl,--gc-sections",  # Remove unused sections
+    "-C", "link-arg=-Wl,--strip-all",    # Strip all symbols
 ]
 
 [alias]
-# Convenient aliases for optimized builds
 build-release = "build --release"
 build-minimal = "build --release --profile minimal"
 check-all = "check --all-targets"

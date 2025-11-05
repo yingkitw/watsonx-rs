@@ -4,6 +4,7 @@ use crate::config::WatsonxConfig;
 use crate::error::{Error, Result};
 use crate::models::*;
 use crate::types::*;
+use futures::future::join_all;
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -515,6 +516,29 @@ impl WatsonxClient {
             Error::Authentication("Not authenticated. Call connect() first.".to_string())
         })?;
 
+        Self::perform_text_generation_internal(
+            &self.client,
+            access_token,
+            &self.config.project_id,
+            &self.config.api_url,
+            &self.config.api_version,
+            prompt,
+            config,
+        )
+        .await
+    }
+
+    /// Internal method for text generation that can be called from spawned tasks
+    /// This allows true parallelism by not requiring &self
+    async fn perform_text_generation_internal(
+        client: &Client,
+        access_token: &str,
+        project_id: &str,
+        api_url: &str,
+        api_version: &str,
+        prompt: &str,
+        config: &GenerationConfig,
+    ) -> Result<String> {
         let params = GenerationParams {
             decoding_method: "greedy".to_string(),
             max_new_tokens: config.max_tokens,
@@ -529,17 +553,16 @@ impl WatsonxClient {
             input: prompt.to_string(),
             parameters: params,
             model_id: config.model_id.clone(),
-            project_id: self.config.project_id.clone(),
+            project_id: project_id.to_string(),
         };
 
         // Use non-streaming endpoint
         let url = format!(
             "{}/ml/v1/text/generation?version={}",
-            self.config.api_url, self.config.api_version
+            api_url, api_version
         );
 
-        let response = self
-            .client
+        let response = client
             .post(&url)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
@@ -695,6 +718,194 @@ impl WatsonxClient {
             0.0
         }
     }
+
+    /// Generate text for multiple prompts concurrently and collect all results
+    /// 
+    /// This method executes all generation requests in parallel by spawning each
+    /// request as a separate async task, maximizing parallelism for I/O-bound operations.
+    /// Results are collected once all requests complete (or fail). Each request can
+    /// have its own configuration, or use a shared default configuration.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `requests` - Vector of batch requests, each containing a prompt and optional config
+    /// * `default_config` - Default configuration to use for requests without explicit config
+    /// 
+    /// # Returns
+    /// 
+    /// A `BatchGenerationResult` containing all results, with per-item error handling.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,no_run
+    /// use watsonx_rs::{WatsonxClient, WatsonxConfig, BatchRequest, GenerationConfig, models::models};
+    /// 
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = WatsonxConfig::from_env()?;
+    /// let mut client = WatsonxClient::new(config)?;
+    /// client.connect().await?;
+    /// 
+    /// let default_config = GenerationConfig::default()
+    ///     .with_model(models::GRANITE_4_H_SMALL);
+    /// 
+    /// let requests = vec![
+    ///     BatchRequest::new("Write a haiku about Rust")
+    ///         .with_id("haiku-1"),
+    ///     BatchRequest::new("Explain async/await in one sentence")
+    ///         .with_id("async-1"),
+    ///     BatchRequest::new("What is ownership in Rust?")
+    ///         .with_id("ownership-1"),
+    /// ];
+    /// 
+    /// let batch_result = client.generate_batch(requests, &default_config).await?;
+    /// 
+    /// println!("Total: {}, Successful: {}, Failed: {}", 
+    ///     batch_result.total, batch_result.successful, batch_result.failed);
+    /// 
+    /// for item in batch_result.results {
+    ///     if let Some(result) = item.result {
+    ///         println!("[{}] {}", item.id.unwrap_or_default(), result.text);
+    ///     } else if let Some(error) = item.error {
+    ///         println!("[{}] Error: {}", item.id.unwrap_or_default(), error);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn generate_batch(
+        &self,
+        requests: Vec<BatchRequest>,
+        default_config: &GenerationConfig,
+    ) -> Result<BatchGenerationResult> {
+        let start_time = Instant::now();
+
+        // Check authentication before spawning tasks
+        let access_token = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Call connect() first.".to_string())
+        })?;
+
+        // Clone necessary parts for spawning tasks
+        // reqwest::Client is designed to be cloned (uses connection pooling internally)
+        let http_client = self.client.clone();
+        let access_token = access_token.clone();
+        let project_id = self.config.project_id.clone();
+        let api_url = self.config.api_url.clone();
+        let api_version = self.config.api_version.clone();
+
+        // Spawn each request as a separate async task for true parallelism
+        let tasks: Vec<_> = requests
+            .into_iter()
+            .map(|req| {
+                let prompt = req.prompt.clone();
+                let config = req.config.clone().unwrap_or_else(|| default_config.clone());
+                let id = req.id.clone();
+                
+                // Clone necessary data for the spawned task
+                let http_client = http_client.clone();
+                let access_token = access_token.clone();
+                let project_id = project_id.clone();
+                let api_url = api_url.clone();
+                let api_version = api_version.clone();
+                
+                // Spawn as a separate task for true parallelism
+                tokio::spawn(async move {
+                    // Call the internal generation method directly
+                    let result = Self::perform_text_generation_internal(
+                        &http_client,
+                        &access_token,
+                        &project_id,
+                        &api_url,
+                        &api_version,
+                        &prompt,
+                        &config,
+                    ).await;
+                    
+                    match result {
+                        Ok(text) => {
+                            let gen_result = GenerationResult::new(text, config.model_id.clone());
+                            BatchItemResult::success(id, prompt, gen_result)
+                        }
+                        Err(error) => BatchItemResult::failure(id, prompt, error),
+                    }
+                })
+            })
+            .collect();
+
+        // Wait for all tasks to complete and collect results
+        let results: Vec<BatchItemResult> = join_all(tasks)
+            .await
+            .into_iter()
+            .map(|task_result| {
+                // Handle task join errors (shouldn't happen in normal operation)
+                task_result.unwrap_or_else(|e| {
+                    BatchItemResult::failure(
+                        None,
+                        String::new(),
+                        Error::Network(format!("Task join error: {}", e)),
+                    )
+                })
+            })
+            .collect();
+        
+        let duration = start_time.elapsed();
+        
+        Ok(BatchGenerationResult::new(results, duration))
+    }
+
+    /// Generate text for multiple prompts concurrently using a shared configuration
+    /// 
+    /// Convenience method that uses the same configuration for all prompts.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `prompts` - Vector of prompts to generate text for
+    /// * `config` - Configuration to use for all requests
+    /// 
+    /// # Returns
+    /// 
+    /// A `BatchGenerationResult` containing all results.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,no_run
+    /// use watsonx_rs::{WatsonxClient, WatsonxConfig, GenerationConfig, models::models};
+    /// 
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = WatsonxConfig::from_env()?;
+    /// let mut client = WatsonxClient::new(config)?;
+    /// client.connect().await?;
+    /// 
+    /// let gen_config = GenerationConfig::default()
+    ///     .with_model(models::GRANITE_4_H_SMALL);
+    /// 
+    /// let prompts = vec![
+    ///     "Write a haiku about Rust".to_string(),
+    ///     "Explain async/await in one sentence".to_string(),
+    ///     "What is ownership in Rust?".to_string(),
+    /// ];
+    /// 
+    /// let batch_result = client.generate_batch_simple(prompts, &gen_config).await?;
+    /// 
+    /// for item in batch_result.results {
+    ///     if let Some(result) = item.result {
+    ///         println!("Generated: {}", result.text);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn generate_batch_simple(
+        &self,
+        prompts: Vec<String>,
+        config: &GenerationConfig,
+    ) -> Result<BatchGenerationResult> {
+        let requests: Vec<BatchRequest> = prompts
+            .into_iter()
+            .map(|prompt| BatchRequest::new(prompt))
+            .collect();
+        
+        self.generate_batch(requests, config).await
+    }
 }
 
 #[cfg(test)]
@@ -725,5 +936,116 @@ mod tests {
 
         let config = WatsonxConfig::new("test_key".to_string(), "test_project".to_string());
         assert!(config.validate().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+
+    #[test]
+    fn test_batch_request_creation() {
+        let req = BatchRequest::new("test prompt");
+        assert_eq!(req.prompt, "test prompt");
+        assert!(req.config.is_none());
+        assert!(req.id.is_none());
+
+        let req = BatchRequest::new("test prompt").with_id("test-id");
+        assert_eq!(req.id, Some("test-id".to_string()));
+
+        let config = GenerationConfig::default();
+        let req = BatchRequest::with_config("test prompt", config.clone());
+        assert_eq!(req.prompt, "test prompt");
+        assert!(req.config.is_some());
+    }
+
+    #[test]
+    fn test_batch_item_result() {
+        let result = GenerationResult::new("test text".to_string(), "model".to_string());
+        let item = BatchItemResult::success(
+            Some("id-1".to_string()),
+            "prompt".to_string(),
+            result.clone(),
+        );
+        
+        assert!(item.is_success());
+        assert!(!item.is_failure());
+        assert_eq!(item.id, Some("id-1".to_string()));
+        assert_eq!(item.prompt, "prompt");
+        assert!(item.result.is_some());
+        assert!(item.error.is_none());
+
+        let error = Error::Api("test error".to_string());
+        let item = BatchItemResult::failure(
+            Some("id-2".to_string()),
+            "prompt2".to_string(),
+            error.clone(),
+        );
+        
+        assert!(!item.is_success());
+        assert!(item.is_failure());
+        assert_eq!(item.id, Some("id-2".to_string()));
+        assert!(item.result.is_none());
+        assert!(item.error.is_some());
+    }
+
+    #[test]
+    fn test_batch_generation_result() {
+        let results = vec![
+            BatchItemResult::success(
+                Some("id-1".to_string()),
+                "prompt1".to_string(),
+                GenerationResult::new("result1".to_string(), "model".to_string()),
+            ),
+            BatchItemResult::success(
+                Some("id-2".to_string()),
+                "prompt2".to_string(),
+                GenerationResult::new("result2".to_string(), "model".to_string()),
+            ),
+            BatchItemResult::failure(
+                Some("id-3".to_string()),
+                "prompt3".to_string(),
+                Error::Api("error".to_string()),
+            ),
+        ];
+
+        let batch_result = BatchGenerationResult::new(results, Duration::from_secs(1));
+        
+        assert_eq!(batch_result.total, 3);
+        assert_eq!(batch_result.successful, 2);
+        assert_eq!(batch_result.failed, 1);
+        assert!(!batch_result.all_succeeded());
+        assert!(batch_result.any_failed());
+        
+        let successes = batch_result.successes();
+        assert_eq!(successes.len(), 2);
+        
+        let failures = batch_result.failures();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].0, "prompt3");
+    }
+
+    #[test]
+    fn test_batch_generation_result_all_succeeded() {
+        let results = vec![
+            BatchItemResult::success(
+                None,
+                "prompt1".to_string(),
+                GenerationResult::new("result1".to_string(), "model".to_string()),
+            ),
+            BatchItemResult::success(
+                None,
+                "prompt2".to_string(),
+                GenerationResult::new("result2".to_string(), "model".to_string()),
+            ),
+        ];
+
+        let batch_result = BatchGenerationResult::new(results, Duration::from_secs(1));
+        
+        assert_eq!(batch_result.total, 2);
+        assert_eq!(batch_result.successful, 2);
+        assert_eq!(batch_result.failed, 0);
+        assert!(batch_result.all_succeeded());
+        assert!(!batch_result.any_failed());
     }
 }

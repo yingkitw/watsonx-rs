@@ -25,6 +25,7 @@ graph TB
     B --> C[WatsonxConfig]
     B --> D[Authentication]
     B --> E[Generation API]
+    B --> BA[Batch Generation]
     
     C --> F[Environment Variables]
     C --> G[Configuration Options]
@@ -34,12 +35,22 @@ graph TB
     
     E --> J[Streaming Endpoint]
     E --> K[Generation Params]
+    E --> N[Non-Streaming Endpoint]
     
     J --> L[SSE Parser]
     L --> M[Stream Callback]
     M --> A
     
-    B --> N[Quality Assessment]
+    N --> NA[Complete Response]
+    NA --> A
+    
+    BA --> BB[BatchRequest Queue]
+    BB --> BC[tokio::spawn Tasks]
+    BC --> BD[Concurrent HTTP Requests]
+    BD --> BE[BatchGenerationResult]
+    BE --> A
+    
+    B --> NQ[Quality Assessment]
     
     O --> P[OrchestrateConfig]
     O --> Q[Agent API]
@@ -61,6 +72,8 @@ graph TB
     style J fill:#fff4e1
     style L fill:#e8f5e9
     style V fill:#e8f5e9
+    style BA fill:#fff9e1
+    style BC fill:#ffe1f5
 ```
 
 ## Component Architecture
@@ -75,6 +88,7 @@ The main client interface for interacting with WatsonX services.
 - Handle HTTP requests to WatsonX API
 - Parse SSE streaming responses
 - Provide quality assessment
+- Execute concurrent batch operations with true parallelism
 
 **Key Methods:**
 - `new()` - Create client from configuration
@@ -84,6 +98,8 @@ The main client interface for interacting with WatsonX services.
 - `generate_with_config()` - Generate with custom configuration
 - `generate_text()` - Standard text generation (returns complete response)
 - `generate_text_stream()` - Real-time streaming generation
+- `generate_batch()` - Concurrent batch generation with per-request configuration
+- `generate_batch_simple()` - Concurrent batch generation with uniform configuration
 - `list_models()` - Fetch available foundation models from API
 - `assess_quality()` - Evaluate generated text quality
 
@@ -171,6 +187,37 @@ Dynamic model information fetched from WatsonX API.
 - `max_context_length` - Maximum context length
 - `available` - Availability status
 
+#### 6.1. Batch Generation Types (src/types.rs)
+Types for concurrent batch text generation operations.
+
+**BatchRequest:**
+- `prompt` - Text prompt for generation
+- `config` - Optional per-request configuration (uses default if None)
+- `id` - Optional identifier for tracking requests
+
+**BatchItemResult:**
+- `id` - Request identifier (if provided)
+- `prompt` - Original prompt used
+- `result` - Generation result if successful
+- `error` - Error if request failed
+- Helper methods: `is_success()`, `is_failure()`
+
+**BatchGenerationResult:**
+- `results` - Vector of all batch item results
+- `total` - Total number of requests
+- `successful` - Number of successful requests
+- `failed` - Number of failed requests
+- `duration` - Total execution time
+- Helper methods: `successes()`, `failures()`, `all_succeeded()`, `any_failed()`
+
+**Batch Execution Flow:**
+1. Create `BatchRequest` instances with prompts and optional configs
+2. Call `generate_batch()` or `generate_batch_simple()`
+3. Each request is spawned as a separate `tokio::spawn` task
+4. All tasks execute concurrently using shared HTTP client
+5. Results are collected and returned as `BatchGenerationResult`
+6. Per-item error handling allows partial success
+
 #### 7. `OrchestrateClient` (src/orchestrate/client.rs)
 Client for WatsonX Orchestrate agent management and chat functionality.
 
@@ -257,6 +304,43 @@ sequenceDiagram
     end
     Client-->>User: GenerationResult
 ```
+
+### Batch Generation Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant Tokio
+    participant API1
+    participant API2
+    participant API3
+    
+    User->>Client: generate_batch(requests, config)
+    Client->>Client: Clone HTTP client & config
+    loop For each request
+        Client->>Tokio: tokio::spawn(async task)
+        Tokio->>API1: Concurrent HTTP request 1
+        Tokio->>API2: Concurrent HTTP request 2
+        Tokio->>API3: Concurrent HTTP request 3
+    end
+    par Parallel execution
+        API1-->>Tokio: Response 1
+        API2-->>Tokio: Response 2
+        API3-->>Tokio: Response 3
+    end
+    Tokio-->>Client: All tasks complete
+    Client->>Client: Collect results
+    Client->>Client: Create BatchGenerationResult
+    Client-->>User: BatchGenerationResult
+```
+
+**Key Characteristics:**
+- Each request spawns as separate `tokio::spawn` task
+- True parallelism across multiple threads
+- Shared HTTP client (reqwest::Client uses connection pooling)
+- Per-item error handling (partial success supported)
+- Results collected once all tasks complete
 
 ### Non-streaming Generation Flow
 
@@ -468,7 +552,20 @@ Returns score from 0.0 to 1.0
 - Quality assessment results
 - Model constants
 
-## Orchestrate SDK Enhancements (Latest)
+## WatsonX AI SDK Enhancements (Latest)
+
+### Batch Generation (Latest)
+- ✅ Concurrent batch generation with `generate_batch()` and `generate_batch_simple()`
+- ✅ True parallelism using `tokio::spawn` for each request
+- ✅ Per-item error handling allowing partial success
+- ✅ Flexible configuration (default or per-request)
+- ✅ Result tracking with success/failure counts and duration
+- ✅ Comprehensive batch types (`BatchRequest`, `BatchItemResult`, `BatchGenerationResult`)
+- ✅ Color-coded example demonstrating parallel execution
+- ✅ Extracted internal generation method for reusability
+- ✅ Comprehensive unit tests
+
+## Orchestrate SDK Enhancements
 
 ### Recent Improvements
 - ✅ Flexible response parsing for API variations

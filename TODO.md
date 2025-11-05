@@ -114,6 +114,18 @@
 - Fixed tools listing - now correctly parses tool responses
 - Improved error handling in examples with info messages for optional features
 
+✅ **Batch Generation Implementation**
+- Implemented `generate_batch()` for concurrent text generation with per-request configuration
+- Implemented `generate_batch_simple()` convenience method for uniform configurations
+- Added batch types: `BatchRequest`, `BatchItemResult`, `BatchGenerationResult`
+- Uses `tokio::spawn` for true parallelism across multiple threads
+- Per-item error handling - each request can succeed or fail independently
+- Result tracking with success/failure counts and duration
+- Created `batch_generation.rs` example with color-coded output for visualization
+- Extracted `perform_text_generation_internal()` for reusable generation logic
+- All requests execute concurrently using separate async tasks
+- Comprehensive unit tests for batch functionality
+
 ✅ **Endpoint Availability Handling**
 - Fixed `list_collections()` endpoint URL (changed from `/v1/collections` to `/collections`)
 - Fixed `list_collections()` auth header (changed from Bearer token to `IAM-API_KEY`)
@@ -129,6 +141,7 @@ The SDK is fully functional with:
 ### WatsonX AI Features
 - ✅ Real-time streaming text generation (`generate_text_stream()`)
 - ✅ Standard text generation (`generate_text()`)
+- ✅ Batch generation with concurrent execution (`generate_batch()`, `generate_batch_simple()`)
 - ✅ Proper SSE parsing for WatsonX streaming endpoint
 - ✅ Environment-based configuration
 - ✅ Multiple model support with updated constants
@@ -136,6 +149,7 @@ The SDK is fully functional with:
 - ✅ Quality assessment tools
 - ✅ Comprehensive error handling
 - ✅ Working examples with consistent method names
+- ✅ Batch generation example with color-coded visualization
 
 ### WatsonX Orchestrate Features
 - ✅ Agent discovery (`list_agents()`, `get_agent()`)
@@ -167,7 +181,7 @@ The SDK is fully functional with:
 - [ ] Add support for more granular streaming control
 - [ ] Implement connection pooling for better performance
 - [ ] Add metrics and observability features
-- [ ] Support for batch requests
+- [x] Support for batch requests ✅ **COMPLETED**
 - [ ] Chat completion API support
 - [ ] Add examples for different use cases (chat, code generation, etc.)
 - [ ] Implement caching for authentication tokens

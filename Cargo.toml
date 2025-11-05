@@ -1,6 +1,6 @@
 [package]
 name = "watsonx-rs"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 description = "Unofficial Rust SDK for IBM WatsonX AI platform"
 license = "Apache-2.0"
@@ -19,9 +19,13 @@ reqwest = { version = "0.11", features = ["json", "stream", "rustls-tls-native-r
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "time", "macros"] }
-dotenvy = "0.15"
-futures = "0.3"
+dotenvy = { version = "0.15", optional = true }
+futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[features]
+default = ["dotenv"]
+dotenv = ["dep:dotenvy"]
 
 [dev-dependencies]
 insta = "1.0"
@@ -35,6 +39,8 @@ codegen-units = 1   # Better optimization
 panic = "abort"     # Smaller panic handling
 strip = true        # Remove debug symbols
 split-debuginfo = "packed"  # Smaller debug info
+debug = false       # No debug info in release
+incremental = false # Disable incremental compilation for smaller size
 
 [profile.dev]
 # Faster compilation for development
@@ -55,3 +61,5 @@ codegen-units = 1
 panic = "abort"
 strip = true
 split-debuginfo = "packed"
+debug = false
+incremental = false

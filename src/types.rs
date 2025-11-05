@@ -313,3 +313,142 @@ impl GenerationAttempt {
         self
     }
 }
+
+/// A single request in a batch generation operation
+#[derive(Clone, Debug)]
+pub struct BatchRequest {
+    /// The prompt to generate text for
+    pub prompt: String,
+    /// Optional configuration (uses default if None)
+    pub config: Option<GenerationConfig>,
+    /// Optional identifier for tracking this request
+    pub id: Option<String>,
+}
+
+impl BatchRequest {
+    /// Create a new batch request with a prompt
+    pub fn new(prompt: impl Into<String>) -> Self {
+        Self {
+            prompt: prompt.into(),
+            config: None,
+            id: None,
+        }
+    }
+
+    /// Create a new batch request with prompt and config
+    pub fn with_config(prompt: impl Into<String>, config: GenerationConfig) -> Self {
+        Self {
+            prompt: prompt.into(),
+            config: Some(config),
+            id: None,
+        }
+    }
+
+    /// Set an identifier for this request
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+}
+
+/// Result for a single item in a batch generation operation
+#[derive(Clone, Debug)]
+pub struct BatchItemResult {
+    /// The identifier for this request (if provided)
+    pub id: Option<String>,
+    /// The prompt that was used
+    pub prompt: String,
+    /// The generation result if successful
+    pub result: Option<GenerationResult>,
+    /// The error if the request failed
+    pub error: Option<crate::error::Error>,
+}
+
+impl BatchItemResult {
+    /// Create a successful batch item result
+    pub fn success(id: Option<String>, prompt: String, result: GenerationResult) -> Self {
+        Self {
+            id,
+            prompt,
+            result: Some(result),
+            error: None,
+        }
+    }
+
+    /// Create a failed batch item result
+    pub fn failure(id: Option<String>, prompt: String, error: crate::error::Error) -> Self {
+        Self {
+            id,
+            prompt,
+            result: None,
+            error: Some(error),
+        }
+    }
+
+    /// Check if this result is successful
+    pub fn is_success(&self) -> bool {
+        self.error.is_none()
+    }
+
+    /// Check if this result failed
+    pub fn is_failure(&self) -> bool {
+        self.error.is_some()
+    }
+}
+
+/// Result of a batch generation operation
+#[derive(Clone, Debug)]
+pub struct BatchGenerationResult {
+    /// Results for each item in the batch
+    pub results: Vec<BatchItemResult>,
+    /// Total number of requests
+    pub total: usize,
+    /// Number of successful requests
+    pub successful: usize,
+    /// Number of failed requests
+    pub failed: usize,
+    /// Total duration of the batch operation
+    pub duration: Duration,
+}
+
+impl BatchGenerationResult {
+    /// Create a new batch generation result
+    pub fn new(results: Vec<BatchItemResult>, duration: Duration) -> Self {
+        let successful = results.iter().filter(|r| r.is_success()).count();
+        let failed = results.len() - successful;
+        
+        Self {
+            total: results.len(),
+            successful,
+            failed,
+            results,
+            duration,
+        }
+    }
+
+    /// Get all successful results
+    pub fn successes(&self) -> Vec<&GenerationResult> {
+        self.results
+            .iter()
+            .filter_map(|r| r.result.as_ref())
+            .collect()
+    }
+
+    /// Get all failed results with their errors
+    pub fn failures(&self) -> Vec<(&str, &crate::error::Error)> {
+        self.results
+            .iter()
+            .filter_map(|r| r.error.as_ref().map(|e| (r.prompt.as_str(), e)))
+            .collect()
+    }
+
+    /// Check if all requests succeeded
+    pub fn all_succeeded(&self) -> bool {
+        self.failed == 0
+    }
+
+    /// Check if any request failed
+    pub fn any_failed(&self) -> bool {
+        self.failed > 0
+    }
+}

@@ -25,6 +25,7 @@ pub struct WatsonxConfig {
 impl WatsonxConfig {
     /// Create configuration from environment variables
     pub fn from_env() -> Result<Self> {
+        #[cfg(feature = "dotenv")]
         dotenvy::dotenv().ok();
 
         let api_key = env::var("WATSONX_API_KEY")

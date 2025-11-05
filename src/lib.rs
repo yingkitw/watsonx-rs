@@ -71,3 +71,5 @@ pub use orchestrate::OrchestrateClient;
 pub use orchestrate::{OrchestrateConfig, Agent, Message, MessagePayload};
 pub use orchestrate::*;
 pub use types::*;
+// Re-export batch types explicitly for better discoverability
+pub use types::{BatchRequest, BatchItemResult, BatchGenerationResult};

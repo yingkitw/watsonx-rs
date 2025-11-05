@@ -224,6 +224,116 @@ let config = GenerationConfig::default()
 - ✅ Processing long responses incrementally
 - ✅ Building streaming APIs
 
+### Use `generate_batch()` or `generate_batch_simple()` when:
+- ✅ Processing multiple prompts concurrently
+- ✅ Need to maximize throughput
+- ✅ Want to collect all results at once
+- ✅ Each request can succeed or fail independently
+
+## 🔄 Batch Generation
+
+Batch generation allows you to process multiple prompts concurrently, improving throughput and efficiency.
+
+### Pattern 1: Simple Batch with Uniform Configuration
+
+```rust
+use watsonx_rs::{WatsonxClient, WatsonxConfig, GenerationConfig, models::models};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = WatsonxConfig::from_env()?;
+    let mut client = WatsonxClient::new(config)?;
+    client.connect().await?;
+    
+    let gen_config = GenerationConfig::default()
+        .with_model(models::GRANITE_4_H_SMALL);
+    
+    let prompts = vec![
+        "Write a haiku about Rust".to_string(),
+        "Explain async/await in one sentence".to_string(),
+        "What is ownership in Rust?".to_string(),
+    ];
+    
+    let batch_result = client.generate_batch_simple(prompts, &gen_config).await?;
+    
+    println!("Total: {}, Successful: {}, Failed: {}", 
+        batch_result.total, batch_result.successful, batch_result.failed);
+    
+    for item in batch_result.results {
+        if let Some(result) = item.result {
+            println!("Generated: {}", result.text);
+        }
+    }
+    
+    Ok(())
+}
+```
+
+### Pattern 2: Batch with Custom IDs and Mixed Configurations
+
+```rust
+use watsonx_rs::{WatsonxClient, WatsonxConfig, BatchRequest, GenerationConfig, models::models};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = WatsonxConfig::from_env()?;
+    let mut client = WatsonxClient::new(config)?;
+    client.connect().await?;
+    
+    let default_config = GenerationConfig::default()
+        .with_model(models::GRANITE_4_H_SMALL);
+    
+    let quick_config = GenerationConfig::quick_response()
+        .with_model(models::GRANITE_4_H_SMALL);
+    
+    let requests = vec![
+        BatchRequest::new("Write a haiku about Rust")
+            .with_id("haiku-1"),
+        BatchRequest::with_config("Quick response", quick_config)
+            .with_id("quick-1"),
+        BatchRequest::new("Long explanation")
+            .with_id("long-1"),
+    ];
+    
+    let batch_result = client.generate_batch(requests, &default_config).await?;
+    
+    // Process results
+    for item in batch_result.results {
+        if let Some(result) = item.result {
+            println!("[{}] {}", 
+                item.id.unwrap_or_default(), 
+                result.text);
+        } else if let Some(error) = item.error {
+            println!("[{}] Error: {}", 
+                item.id.unwrap_or_default(), 
+                error);
+        }
+    }
+    
+    // Get only successful results
+    for result in batch_result.successes() {
+        println!("Success: {}", result.text);
+    }
+    
+    // Check for failures
+    if batch_result.any_failed() {
+        for (prompt, error) in batch_result.failures() {
+            eprintln!("Failed prompt '{}': {}", prompt, error);
+        }
+    }
+    
+    Ok(())
+}
+```
+
+### Batch Result Features
+
+- **Concurrent Execution**: All requests run in parallel for maximum throughput
+- **Per-Item Error Handling**: Each request can succeed or fail independently
+- **Result Tracking**: Track success/failure counts and duration
+- **Flexible Configuration**: Use default config or per-request configs
+- **Request IDs**: Optional IDs for tracking individual requests
+
 ## ⚙️ WatsonX Orchestrate
 
 The SDK provides comprehensive support for WatsonX Orchestrate with the following capabilities:
@@ -420,6 +530,9 @@ cargo run --example list_models
 
 # Use predefined model constants
 cargo run --example model_constants
+
+# Batch generation with concurrent execution
+cargo run --example batch_generation
 ```
 
 ### WatsonX Orchestrate Examples
@@ -527,7 +640,7 @@ The SDK is built with:
 - 🔄 Chat completion API
 - 🔄 Embeddings generation
 - 🔄 Fine-tuning support
-- 🔄 Batch processing
+- ✅ Batch processing
 
 ### Future (Full WatsonX Platform)
 - 📊 **watsonx.data**: Data ingestion, processing, analytics
