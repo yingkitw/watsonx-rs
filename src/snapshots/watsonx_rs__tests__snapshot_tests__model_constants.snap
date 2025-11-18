@@ -1,0 +1,5 @@
+---
+source: src/tests.rs
+expression: "format!(\"granite_4_h_small: {}\", crate::models::models::GRANITE_4_H_SMALL)"
+---
+granite_4_h_small: ibm/granite-4-h-small

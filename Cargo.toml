@@ -1,6 +1,6 @@
 [package]
 name = "watsonx-rs"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "Unofficial Rust SDK for IBM WatsonX AI platform"
 license = "Apache-2.0"

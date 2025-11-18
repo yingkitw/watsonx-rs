@@ -6,36 +6,15 @@
 //! 3. Chat with custom assistants
 //! 4. Search documents using vector similarity
 
-use watsonx_rs::{
-    OrchestrateClient, OrchestrateConfig,
-};
+use watsonx_rs::OrchestrateConnection;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration from environment
     dotenvy::dotenv().ok();
     
-    // Load Orchestrate config from environment variables
-    // Required: WXO_INSTANCE_ID
-    // Optional: WXO_REGION (defaults to us-south)
-    let config = OrchestrateConfig::from_env()
-        .expect("Failed to load Orchestrate config. Please set WXO_INSTANCE_ID in your .env file");
-    
-    // Get API key (supports multiple variable names for flexibility)
-    let api_key = std::env::var("WATSONX_API_KEY")
-        .or_else(|_| std::env::var("IAM_API_KEY"))
-        .or_else(|_| std::env::var("WO_API_KEY"))
-        .unwrap_or_else(|_| {
-            eprintln!("❌ Error: API key not found!");
-            eprintln!("\nPlease set one of the following in your .env file:");
-            eprintln!("  - WATSONX_API_KEY");
-            eprintln!("  - IAM_API_KEY");
-            eprintln!("  - WO_API_KEY");
-            std::process::exit(1);
-        });
-
-    // Create Orchestrate client
-    let client = OrchestrateClient::new(config).with_token(api_key);
+    // One-line connection!
+    let client = OrchestrateConnection::new().from_env().await?;
     
     // Display configuration info
     println!("Using Orchestrate URL: {}", client.config().get_base_url());

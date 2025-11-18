@@ -6,22 +6,16 @@
 //! 3. Use different models
 //! 4. Handle errors properly
 
-use watsonx_rs::{WatsonxClient, WatsonxConfig, GenerationConfig, models};
+use watsonx_rs::{WatsonxConnection, GenerationConfig};
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create configuration from environment variables
-    // Set WATSONX_API_KEY and WATSONX_PROJECT_ID in your .env file
-    let config = WatsonxConfig::from_env()?;
+    dotenvy::dotenv().ok();
 
-    // Create client with a specific model
-    let mut client = WatsonxClient::new(config)?
-        .with_model(models::models::GRANITE_3_3_8B_INSTRUCT);
-
-    // Connect to WatsonX
+    // One-line connection!
     println!("Connecting to WatsonX...");
-    client.connect().await?;
+    let client = WatsonxConnection::new().from_env().await?;
     println!("Connected successfully!");
 
     // Create custom generation configuration

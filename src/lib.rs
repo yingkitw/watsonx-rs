@@ -51,6 +51,7 @@
 
 pub mod client;
 pub mod config;
+pub mod connection;
 pub mod error;
 pub mod models;
 pub mod orchestrate;
@@ -65,6 +66,7 @@ mod orchestrate_tests;
 // Re-export main types for convenience
 pub use client::WatsonxClient;
 pub use config::WatsonxConfig;
+pub use connection::WatsonxConnection;
 pub use error::{Error, Result};
 pub use models::*;
 pub use orchestrate::OrchestrateClient;

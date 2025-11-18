@@ -22,7 +22,9 @@ pub mod tool;
 pub mod run;
 pub mod collection;
 pub mod chat;
+pub mod connection;
 
 pub use config::OrchestrateConfig;
 pub use client::OrchestrateClient;
+pub use connection::OrchestrateConnection;
 pub use types::*;

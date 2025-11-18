@@ -6,7 +6,6 @@ mod snapshot_tests {
     use insta::assert_snapshot;
 
     #[test]
-    #[ignore] // Snapshot tests disabled - prompts have been centralized
     fn test_config_snapshot() {
         let config = WatsonxConfig::new("test_api_key_redacted".to_string(), "test_project_id".to_string());
 
@@ -14,7 +13,6 @@ mod snapshot_tests {
     }
 
     #[test]
-    #[ignore] // Snapshot tests disabled - prompts have been centralized
     fn test_quality_assessment_snapshot() {
         let config = WatsonxConfig::new("test_key".to_string(), "test_project".to_string());
         let client = WatsonxClient::new(config).unwrap();
@@ -34,7 +32,6 @@ mod snapshot_tests {
     }
 
     #[test]
-    #[ignore] // Snapshot tests disabled - prompts have been centralized
     fn test_model_constants() {
         assert_snapshot!(format!(
             "granite_4_h_small: {}",

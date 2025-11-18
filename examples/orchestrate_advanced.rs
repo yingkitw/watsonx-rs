@@ -10,7 +10,7 @@
 //! - Document collections
 
 use watsonx_rs::{
-    OrchestrateClient, OrchestrateConfig, BatchMessageRequest, Message,
+    OrchestrateConnection, BatchMessageRequest, Message,
 };
 use std::io::{self, Write};
 
@@ -21,35 +21,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Advanced Orchestrate SDK Test");
     println!("================================\n");
 
-    // Initialize client
-    let config = OrchestrateConfig::from_env()
-        .expect("Failed to load Orchestrate config from environment");
-
-    // Get Watson Orchestrate API key
-    let api_key = std::env::var("WXO_KEY")
-        .or_else(|_| std::env::var("WATSONX_API_KEY"))
-        .or_else(|_| std::env::var("IAM_API_KEY"))
-        .or_else(|_| std::env::var("WO_API_KEY"))
-        .expect("WXO_KEY, WATSONX_API_KEY, IAM_API_KEY, or WO_API_KEY must be set");
-
-    // Generate JWT token from API key
-    println!("🔐 Generating JWT token from API key...");
-    let token = match OrchestrateClient::generate_jwt_token(&api_key).await {
-        Ok(t) => {
-            println!("✅ JWT token generated successfully\n");
-            t
+    // One-line connection!
+    println!("🔐 Connecting to Watson Orchestrate...");
+    let client = match OrchestrateConnection::new().from_env().await {
+        Ok(c) => {
+            println!("✅ Connected successfully\n");
+            c
         }
         Err(e) => {
-            println!("❌ Failed to generate JWT token: {}", e);
-            println!("\n⚠️  Please check:");
-            println!("   - WXO_KEY is valid and not expired");
-            println!("   - API key has correct permissions");
-            println!("   - Network connectivity to iam.cloud.ibm.com");
-            return Err(format!("JWT token generation failed: {}", e).into());
+            println!("❌ Connection failed: {}", e);
+            return Err(e.into());
         }
     };
-
-    let client = OrchestrateClient::new(config).with_token(token);
 
     println!("✅ Client initialized");
     println!("URL: {}\n", client.config().get_base_url());

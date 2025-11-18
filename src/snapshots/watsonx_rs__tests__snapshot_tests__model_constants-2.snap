@@ -1,0 +1,5 @@
+---
+source: src/tests.rs
+expression: "format!(\"granite_3_3_8b: {}\", crate::models::models::GRANITE_3_3_8B_INSTRUCT)"
+---
+granite_3_3_8b: ibm/granite-3-3-8b-instruct

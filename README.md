@@ -17,13 +17,13 @@ Currently, we support both `watsonx.ai` (text generation) and `watsonx.orchestra
 
 watsonx Orchestrate API Reference: https://developer.ibm.com/apis/catalog/watsonorchestrate--custom-assistants/api
 
-## 🚀 Quick Start
+## 🚀 Quick Start (5 Minutes)
 
 ### 1. Add to Cargo.toml
 
 ```toml
 [dependencies]
-watsonx-rs = "0.1.0"
+watsonx-rs = "0.1"
 tokio = { version = "1.0", features = ["full"] }
 ```
 
@@ -32,60 +32,72 @@ tokio = { version = "1.0", features = ["full"] }
 Create a `.env` file in your project root:
 
 ```bash
-# Copy the example file
-cp .env.example .env
-
-# Edit with your actual values
+# WatsonX AI
 WATSONX_API_KEY=your_actual_api_key
 WATSONX_PROJECT_ID=your_actual_project_id
+
+# Watson Orchestrate (optional)
+WXO_INSTANCE_ID=your_instance_id
+WXO_KEY=your_orchestrate_api_key
 ```
 
-### 3. Generate text (streaming)
+### 3. Generate text with WatsonX AI (One-Line Connection!)
 
 ```rust
-use watsonx_rs::{WatsonxClient, WatsonxConfig, GenerationConfig, models::models};
+use watsonx_rs::{WatsonxConnection, GenerationConfig, models::models};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create client from environment
-    let config = WatsonxConfig::from_env()?;
-    let mut client = WatsonxClient::new(config)?;
+    // ✨ One-line connection - that's it!
+    let client = WatsonxConnection::new().from_env().await?;
     
-    // Connect to WatsonX
-    client.connect().await?;
-    
-    // Set the model and generate text with real-time streaming
+    // Generate text with streaming
     let gen_config = GenerationConfig::default()
         .with_model(models::GRANITE_4_H_SMALL);
     
-    let result = client.generate_text_stream("Hello, world!", &gen_config, |chunk| {
-        print!("{}", chunk);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
-    }).await?;
+    let result = (&client).generate_text_stream(
+        "Explain Rust ownership in one sentence.",
+        &gen_config,
+        |chunk| {
+            print!("{}", chunk);
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        }
+    ).await?;
     
-    println!("\nModel used: {}", result.model_id);
+    println!("\n✅ Generated with model: {}", result.model_id);
     Ok(())
 }
 ```
 
-### 4. Generate text (non-streaming)
+### 4. Chat with Watson Orchestrate (One-Line Connection!)
 
 ```rust
-use watsonx_rs::{WatsonxClient, WatsonxConfig, GenerationConfig, models::models};
+use watsonx_rs::OrchestrateConnection;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = WatsonxConfig::from_env()?;
-    let mut client = WatsonxClient::new(config)?;
-    client.connect().await?;
+    // ✨ One-line connection - that's it!
+    let client = OrchestrateConnection::new().from_env().await?;
     
-    // Set the model and generate complete response at once
-    let gen_config = GenerationConfig::default()
-        .with_model(models::GRANITE_4_H_SMALL);
+    // List available agents
+    let agents = client.list_agents().await?;
     
-    let result = client.generate_text("Write a haiku about programming.", &gen_config).await?;
+    if let Some(agent) = agents.first() {
+        println!("✅ Found agent: {}", agent.name);
+        
+        // Create a conversation thread
+        let thread = client.create_thread(Some(&agent.agent_id)).await?;
+        
+        // Send a message
+        let response = client.send_message(
+            &agent.agent_id,
+            &thread.thread_id,
+            "Hello! How can you help me?"
+        ).await?;
+        
+        println!("Agent: {}", response.message);
+    }
     
-    println!("Generated: {}", result.text);
     Ok(())
 }
 ```
@@ -604,6 +616,58 @@ match client.generate_text("prompt", &config).await {
     Err(e) => eprintln!("Other error: {}", e),
 }
 ```
+
+## 🤖 WatsonX AI Quick Start
+
+For simplified WatsonX AI connection, see **[WATSONX_AI_QUICK_START.md](docs/WATSONX_AI_QUICK_START.md)**.
+
+### One-line connection:
+
+```rust
+let client = WatsonxConnection::new().from_env().await?;
+```
+
+### Setup:
+
+```bash
+# .env file
+WATSONX_API_KEY=your-api-key
+WATSONX_PROJECT_ID=your-project-id
+```
+
+### Run example:
+
+```bash
+cargo run --example basic_simple
+```
+
+For more details, see [docs/WATSONX_AI_QUICK_START.md](docs/WATSONX_AI_QUICK_START.md).
+
+## 🤖 Watson Orchestrate Quick Start
+
+For simplified Watson Orchestrate connection, see **[QUICK_START.md](docs/QUICK_START.md)**.
+
+### One-line connection:
+
+```rust
+let client = OrchestrateConnection::new().from_env().await?;
+```
+
+### Setup:
+
+```bash
+# .env file
+WXO_INSTANCE_ID=your-instance-id
+WXO_KEY=your-api-key
+```
+
+### Run example:
+
+```bash
+cargo run --example orchestrate_simple
+```
+
+For more details, see [docs/QUICK_START.md](docs/QUICK_START.md).
 
 ## 🏗️ Architecture
 

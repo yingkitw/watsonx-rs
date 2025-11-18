@@ -3,7 +3,7 @@
 //! This example demonstrates how to use the chat with documents feature
 //! to ask questions about uploaded documents.
 
-use watsonx_rs::{OrchestrateClient, OrchestrateConfig, ChatWithDocsRequest};
+use watsonx_rs::{OrchestrateConnection, ChatWithDocsRequest};
 use std::io::{self, Write};
 
 #[tokio::main]
@@ -13,23 +13,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📄 Chat with Documents Example");
     println!("==============================\n");
 
-    // Initialize client
-    let config = OrchestrateConfig::from_env()
-        .expect("Failed to load Orchestrate config from environment");
-
-    // Get Watson Orchestrate API key
-    let api_key = std::env::var("WXO_KEY")
-        .or_else(|_| std::env::var("WATSONX_API_KEY"))
-        .or_else(|_| std::env::var("IAM_API_KEY"))
-        .or_else(|_| std::env::var("WO_API_KEY"))
-        .expect("WXO_KEY or similar must be set");
-
-    // Generate JWT token
-    println!("🔐 Generating JWT token...");
-    let token = OrchestrateClient::generate_jwt_token(&api_key).await?;
-    println!("✅ Token generated\n");
-
-    let client = OrchestrateClient::new(config).with_token(token);
+    // One-line connection!
+    println!("🔐 Connecting to Watson Orchestrate...");
+    let client = OrchestrateConnection::new().from_env().await?;
+    println!("✅ Connected\n");
 
     // Get first agent
     println!("📋 Listing agents...");

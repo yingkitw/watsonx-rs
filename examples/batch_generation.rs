@@ -8,7 +8,7 @@
 //!
 //! Different colors are used for each request to visualize parallel execution
 
-use watsonx_rs::{WatsonxClient, WatsonxConfig, BatchRequest, GenerationConfig, models::models};
+use watsonx_rs::{WatsonxConnection, BatchRequest, GenerationConfig, models::models};
 use std::collections::HashMap;
 
 // ANSI color codes for terminal output
@@ -39,13 +39,9 @@ fn colorize(text: &str, color: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load configuration from environment
-    let config = WatsonxConfig::from_env()?;
-    let mut client = WatsonxClient::new(config)?;
-    
-    // Connect to WatsonX
+    dotenvy::dotenv().ok();
     println!("Connecting to WatsonX...");
-    client.connect().await?;
+    let client = WatsonxConnection::new().from_env().await?;
     println!("Connected!\n");
 
     // Create default configuration

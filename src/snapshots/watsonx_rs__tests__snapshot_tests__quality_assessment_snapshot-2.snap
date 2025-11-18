@@ -1,0 +1,5 @@
+---
+source: src/tests.rs
+expression: "format!(\"quality_{}: {}\", name, score)"
+---
+quality_login_command: 0.85

@@ -5,20 +5,15 @@
 //! 2. List all available foundation models
 //! 3. Display model information
 
-use watsonx_rs::{WatsonxClient, WatsonxConfig};
+use watsonx_rs::WatsonxConnection;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create configuration from environment variables
-    // Set WATSONX_API_KEY and WATSONX_PROJECT_ID in your .env file
-    let config = WatsonxConfig::from_env()?;
+    dotenvy::dotenv().ok();
 
-    // Create client
-    let mut client = WatsonxClient::new(config)?;
-
-    // Connect to WatsonX
+    // One-line connection!
     println!("Connecting to WatsonX...");
-    client.connect().await?;
+    let client = WatsonxConnection::new().from_env().await?;
     println!("Connected successfully!");
 
     // List available models

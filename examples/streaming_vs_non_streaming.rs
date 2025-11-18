@@ -1,19 +1,15 @@
 //! Example demonstrating both streaming and non-streaming text generation
 
-use watsonx_rs::{WatsonxClient, WatsonxConfig, GenerationConfig, models::models};
+use watsonx_rs::{WatsonxConnection, GenerationConfig, models::models};
 use std::time::Instant;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create configuration from environment variables
-    let config = WatsonxConfig::from_env()?;
+    dotenvy::dotenv().ok();
 
-    // Create client
-    let mut client = WatsonxClient::new(config)?;
-
-    // Connect to WatsonX
+    // One-line connection!
     println!("Connecting to WatsonX...");
-    client.connect().await?;
+    let client = WatsonxConnection::new().from_env().await?;
     println!("Connected successfully!");
 
     let prompt = "Write a short story about a robot learning to paint.";
