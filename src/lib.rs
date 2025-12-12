@@ -55,6 +55,7 @@ pub mod connection;
 pub mod error;
 pub mod models;
 pub mod orchestrate;
+pub mod sse;
 pub mod types;
 
 #[cfg(test)]
@@ -75,3 +76,5 @@ pub use orchestrate::*;
 pub use types::*;
 // Re-export batch types explicitly for better discoverability
 pub use types::{BatchRequest, BatchItemResult, BatchGenerationResult};
+// Re-export chat completion types
+pub use types::{ChatMessage, ChatCompletionConfig, ChatCompletionResult};

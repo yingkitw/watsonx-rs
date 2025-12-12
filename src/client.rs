@@ -97,7 +97,10 @@ impl WatsonxClient {
             .timeout(Duration::from_secs(config.timeout_secs))
             .danger_accept_invalid_certs(true)
             .build()
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         Ok(Self {
             config,
@@ -140,19 +143,30 @@ impl WatsonxClient {
             .form(&token_request)
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "No error details available".to_string());
             return Err(Error::Authentication(format!(
-                "Authentication failed: {}",
-                response.status()
+                "Failed to authenticate with IAM service (HTTP {}): {}. Verify your WATSONX_API_KEY is correct and the IAM URL is accessible.",
+                status, error_text
             )));
         }
 
         let token_response: TokenResponse = response
             .json()
             .await
-            .map_err(|e| Error::Serialization(e.to_string()))?;
+            .map_err(|e| Error::Serialization(format!(
+                "Failed to parse JSON response: {}. The API response format may have changed. Please report this issue.",
+                e
+            )))?;
 
         self.access_token = Some(token_response.access_token);
         Ok(())
@@ -219,7 +233,9 @@ impl WatsonxClient {
     {
         let request_id = Uuid::new_v4().to_string();
         let access_token = self.access_token.as_ref().ok_or_else(|| {
-            Error::Authentication("Not connected. Call connect() first.".to_string())
+            Error::Authentication(
+                "Not authenticated. Call connect() first to obtain an access token.".to_string(),
+            )
         })?;
 
         let params = GenerationParams {
@@ -253,7 +269,10 @@ impl WatsonxClient {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -262,8 +281,8 @@ impl WatsonxClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::Api(format!(
-                "WatsonX API request failed with status {}: {}",
-                status, error_text
+                "WatsonX API request failed (HTTP {}): {}. Verify your model ID '{}' is correct and your project has access to it.",
+                status, error_text, config.model_id
             )));
         }
 
@@ -341,7 +360,7 @@ impl WatsonxClient {
 
         if answer.trim().is_empty() {
             return Err(Error::Api(
-                "Empty response from WatsonX API".to_string(),
+                "Received empty response from WatsonX API. The model may have generated no output, or the response format was unexpected. Try adjusting your prompt or parameters.".to_string(),
             ));
         }
 
@@ -391,7 +410,10 @@ impl WatsonxClient {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -400,8 +422,8 @@ impl WatsonxClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::Api(format!(
-                "WatsonX API request failed with status {}: {}",
-                status, error_text
+                "WatsonX API request failed (HTTP {}): {}. Verify your model ID '{}' is correct and your project has access to it.",
+                status, error_text, config.model_id
             )));
         }
 
@@ -476,7 +498,7 @@ impl WatsonxClient {
 
         if answer.trim().is_empty() {
             return Err(Error::Api(
-                "Empty response from WatsonX API".to_string(),
+                "Received empty response from WatsonX API. The model may have generated no output, or the response format was unexpected. Try adjusting your prompt or parameters.".to_string(),
             ));
         }
 
@@ -570,7 +592,10 @@ impl WatsonxClient {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -579,8 +604,8 @@ impl WatsonxClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::Api(format!(
-                "WatsonX API request failed with status {}: {}",
-                status, error_text
+                "WatsonX API request failed (HTTP {}): {}. Verify your model ID '{}' is correct and your project has access to it.",
+                status, error_text, config.model_id
             )));
         }
 
@@ -588,19 +613,26 @@ impl WatsonxClient {
         let generation_data: GenerationData = response
             .json()
             .await
-            .map_err(|e| Error::Serialization(e.to_string()))?;
+            .map_err(|e| Error::Serialization(format!(
+                "Failed to parse JSON response: {}. The API response format may have changed. Please report this issue.",
+                e
+            )))?;
 
         if let Some(result) = generation_data.results.first() {
             Ok(result.generated_text.clone())
         } else {
-            Err(Error::Api("No generation results returned".to_string()))
+            Err(Error::Api(
+                "No generation results returned from API. The model may not have generated any output. Try adjusting your prompt or parameters.".to_string(),
+            ))
         }
     }
 
     /// List available foundation models
     pub async fn list_models(&self) -> Result<Vec<crate::types::ModelInfo>> {
         let access_token = self.access_token.as_ref().ok_or_else(|| {
-            Error::Authentication("Not connected. Call connect() first.".to_string())
+            Error::Authentication(
+                "Not authenticated. Call connect() first to obtain an access token.".to_string(),
+            )
         })?;
 
         let url = format!(
@@ -615,7 +647,10 @@ impl WatsonxClient {
             .header("Authorization", format!("Bearer {}", access_token))
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -624,7 +659,7 @@ impl WatsonxClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::Api(format!(
-                "Failed to list models with status {}: {}",
+                "Failed to list available models (HTTP {}): {}. Verify your project ID is correct and you have access to the models API.",
                 status, error_text
             )));
         }
@@ -632,7 +667,10 @@ impl WatsonxClient {
         let response_text = response
             .text()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|e| Error::Network(format!(
+                "Network request failed: {}. Check your internet connection and verify the API endpoint URL is correct.",
+                e
+            )))?;
 
         let models_response: ModelsResponse = serde_json::from_str(&response_text)
             .map_err(|e| Error::Serialization(format!("Failed to parse models response: {}", e)))?;
@@ -905,6 +943,392 @@ impl WatsonxClient {
             .collect();
         
         self.generate_batch(requests, config).await
+    }
+
+    /// Create a chat completion from a list of messages
+    /// 
+    /// This method uses the WatsonX AI chat completion API endpoint to generate
+    /// responses based on a conversation history. It supports system, user, and
+    /// assistant messages for multi-turn conversations.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `messages` - Vector of chat messages representing the conversation
+    /// * `config` - Configuration for the chat completion
+    /// 
+    /// # Returns
+    /// 
+    /// A `ChatCompletionResult` containing the generated message and metadata.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,no_run
+    /// use watsonx_rs::{WatsonxClient, WatsonxConfig, ChatMessage, ChatCompletionConfig, models::models};
+    /// 
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = WatsonxConfig::from_env()?;
+    /// let mut client = WatsonxClient::new(config)?;
+    /// client.connect().await?;
+    /// 
+    /// let chat_config = ChatCompletionConfig::default()
+    ///     .with_model(models::GRANITE_4_H_SMALL);
+    /// 
+    /// let messages = vec![
+    ///     ChatMessage::system("You are a helpful assistant."),
+    ///     ChatMessage::user("What is Rust?"),
+    /// ];
+    /// 
+    /// let result = client.chat_completion(messages, &chat_config).await?;
+    /// println!("Assistant: {}", result.content());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn chat_completion(
+        &self,
+        messages: Vec<ChatMessage>,
+        config: &ChatCompletionConfig,
+    ) -> Result<ChatCompletionResult> {
+        let request_id = Uuid::new_v4().to_string();
+        let access_token = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Call connect() first.".to_string())
+        })?;
+
+        // Build request body
+        let mut request_body = serde_json::json!({
+            "model": config.model_id,
+            "messages": messages,
+            "max_tokens": config.max_tokens,
+        });
+
+        // Add optional parameters
+        if let Some(temperature) = config.temperature {
+            request_body["temperature"] = serde_json::Value::Number(serde_json::Number::from_f64(temperature as f64).unwrap());
+        }
+        if let Some(top_p) = config.top_p {
+            request_body["top_p"] = serde_json::Value::Number(serde_json::Number::from_f64(top_p as f64).unwrap());
+        }
+        if let Some(top_k) = config.top_k {
+            request_body["top_k"] = serde_json::Value::Number(serde_json::Number::from(top_k));
+        }
+        if !config.stop_sequences.is_empty() {
+            request_body["stop"] = serde_json::json!(config.stop_sequences);
+        }
+        if let Some(repetition_penalty) = config.repetition_penalty {
+            request_body["repetition_penalty"] = serde_json::Value::Number(serde_json::Number::from_f64(repetition_penalty as f64).unwrap());
+        }
+
+        // Try both possible endpoints
+        let endpoints = vec![
+            format!("{}/ml/gateway/v1/chat/completions", self.config.api_url),
+            format!("{}/ml/v1/chat/completions?version={}", self.config.api_url, self.config.api_version),
+        ];
+
+        let mut last_error = None;
+        for url in endpoints {
+            let response = self
+                .client
+                .post(&url)
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", access_token))
+                .json(&request_body)
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) if resp.status().is_success() => {
+                    let completion_data: serde_json::Value = resp
+                        .json()
+                        .await
+                        .map_err(|e| Error::Serialization(format!(
+                "Failed to parse JSON response: {}. The API response format may have changed. Please report this issue.",
+                e
+            )))?;
+
+                    // Parse response - handle different response formats
+                    let choice = completion_data["choices"]
+                        .as_array()
+                        .and_then(|choices| choices.first())
+                        .ok_or_else(|| Error::Api("No choices in response".to_string()))?;
+
+                    let message_content = choice["message"]["content"]
+                        .as_str()
+                        .ok_or_else(|| Error::Api("No message content in response".to_string()))?;
+
+                    let message = ChatMessage::assistant(message_content);
+                    let mut result = ChatCompletionResult::new(message, config.model_id.clone())
+                        .with_request_id(request_id.clone());
+
+                    // Extract token usage if available
+                    if let Some(usage) = completion_data.get("usage") {
+                        if let Some(prompt_tokens) = usage["prompt_tokens"].as_u64() {
+                            if let Some(completion_tokens) = usage["completion_tokens"].as_u64() {
+                                if let Some(total_tokens) = usage["total_tokens"].as_u64() {
+                                    result = result.with_tokens(
+                                        prompt_tokens as u32,
+                                        completion_tokens as u32,
+                                        total_tokens as u32,
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    // Extract finish reason if available
+                    if let Some(reason) = choice["finish_reason"].as_str() {
+                        result = result.with_finish_reason(reason);
+                    }
+
+                    return Ok(result);
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let error_text = resp
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    last_error = Some(Error::Api(format!(
+                        "Chat completion failed with status {}: {}",
+                        status, error_text
+                    )));
+                    // Try next endpoint
+                    continue;
+                }
+                Err(e) => {
+                    last_error = Some(Error::Network(e.to_string()));
+                    // Try next endpoint
+                    continue;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            Error::Api("All chat completion endpoints failed".to_string())
+        }))
+    }
+
+    /// Create a chat completion with streaming callback for real-time output
+    /// 
+    /// This method uses the WatsonX AI chat completion streaming endpoint to generate
+    /// responses in real-time. The callback is invoked for each chunk of text as it
+    /// arrives from the API.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `messages` - Vector of chat messages representing the conversation
+    /// * `config` - Configuration for the chat completion
+    /// * `callback` - Function called for each text chunk received
+    /// 
+    /// # Returns
+    /// 
+    /// A `ChatCompletionResult` containing the complete generated message and metadata.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,no_run
+    /// use watsonx_rs::{WatsonxClient, WatsonxConfig, ChatMessage, ChatCompletionConfig, models::models};
+    /// 
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = WatsonxConfig::from_env()?;
+    /// let mut client = WatsonxClient::new(config)?;
+    /// client.connect().await?;
+    /// 
+    /// let chat_config = ChatCompletionConfig::default()
+    ///     .with_model(models::GRANITE_4_H_SMALL);
+    /// 
+    /// let messages = vec![
+    ///     ChatMessage::system("You are a helpful assistant."),
+    ///     ChatMessage::user("Explain async/await in Rust."),
+    /// ];
+    /// 
+    /// let result = client.chat_completion_stream(messages, &chat_config, |chunk| {
+    ///     print!("{}", chunk);
+    ///     std::io::Write::flush(&mut std::io::stdout()).unwrap();
+    /// }).await?;
+    /// 
+    /// println!("\nTotal tokens: {:?}", result.total_tokens);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn chat_completion_stream<F>(
+        &self,
+        messages: Vec<ChatMessage>,
+        config: &ChatCompletionConfig,
+        callback: F,
+    ) -> Result<ChatCompletionResult>
+    where
+        F: Fn(&str) + Send + Sync,
+    {
+        let request_id = Uuid::new_v4().to_string();
+        let access_token = self.access_token.as_ref().ok_or_else(|| {
+            Error::Authentication("Not authenticated. Call connect() first.".to_string())
+        })?;
+
+        // Build request body
+        let mut request_body = serde_json::json!({
+            "model": config.model_id,
+            "messages": messages,
+            "max_tokens": config.max_tokens,
+            "stream": true,
+        });
+
+        // Add optional parameters
+        if let Some(temperature) = config.temperature {
+            request_body["temperature"] = serde_json::Value::Number(serde_json::Number::from_f64(temperature as f64).unwrap());
+        }
+        if let Some(top_p) = config.top_p {
+            request_body["top_p"] = serde_json::Value::Number(serde_json::Number::from_f64(top_p as f64).unwrap());
+        }
+        if let Some(top_k) = config.top_k {
+            request_body["top_k"] = serde_json::Value::Number(serde_json::Number::from(top_k));
+        }
+        if !config.stop_sequences.is_empty() {
+            request_body["stop"] = serde_json::json!(config.stop_sequences);
+        }
+        if let Some(repetition_penalty) = config.repetition_penalty {
+            request_body["repetition_penalty"] = serde_json::Value::Number(serde_json::Number::from_f64(repetition_penalty as f64).unwrap());
+        }
+
+        // Try both possible endpoints
+        let endpoints = vec![
+            format!("{}/ml/gateway/v1/chat/completions", self.config.api_url),
+            format!("{}/ml/v1/chat/completions?version={}", self.config.api_url, self.config.api_version),
+        ];
+
+        let mut last_error = None;
+        for url in endpoints {
+            let response = self
+                .client
+                .post(&url)
+                .header("Accept", "text/event-stream")
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", access_token))
+                .header("Cache-Control", "no-cache")
+                .header("Connection", "keep-alive")
+                .json(&request_body)
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) if resp.status().is_success() => {
+                    let mut answer = String::new();
+                    let mut stream = resp.bytes_stream();
+                    let mut buffer = String::new();
+
+                    // Process stream chunks in real-time
+                    while let Some(chunk_result) = stream.next().await {
+                        let chunk = chunk_result.map_err(|e| Error::Network(e.to_string()))?;
+                        let text = String::from_utf8_lossy(&chunk);
+                        buffer.push_str(&text);
+
+                        // Process complete lines from buffer
+                        while let Some(newline_pos) = buffer.find('\n') {
+                            let line = buffer[..newline_pos].to_string();
+                            buffer = buffer[newline_pos + 1..].to_string();
+
+                            let trimmed = line.trim();
+                            if trimmed.is_empty() || trimmed.starts_with("id:") || trimmed.starts_with("event:") {
+                                continue;
+                            }
+
+                            if trimmed.starts_with("data:") {
+                                let json_data = if trimmed.starts_with("data: ") {
+                                    &trimmed[6..]
+                                } else {
+                                    &trimmed[5..]
+                                };
+
+                                if json_data.trim().is_empty() || json_data.trim() == "[DONE]" {
+                                    continue;
+                                }
+
+                                match serde_json::from_str::<serde_json::Value>(json_data) {
+                                    Ok(data) => {
+                                        // Extract content from delta or message
+                                        if let Some(choices) = data.get("choices").and_then(|c| c.as_array()) {
+                                            if let Some(choice) = choices.first() {
+                                                if let Some(delta) = choice.get("delta") {
+                                                    if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                                        answer.push_str(content);
+                                                        callback(content);
+                                                    }
+                                                } else if let Some(message) = choice.get("message") {
+                                                    if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
+                                                        answer.push_str(content);
+                                                        callback(content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        // Ignore parse errors for individual chunks
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Process any remaining data in buffer
+                    if !buffer.is_empty() {
+                        let trimmed = buffer.trim();
+                        if trimmed.starts_with("data:") {
+                            let json_data = if trimmed.starts_with("data: ") {
+                                &trimmed[6..]
+                            } else {
+                                &trimmed[5..]
+                            };
+
+                            if !json_data.trim().is_empty() && json_data.trim() != "[DONE]" {
+                                if let Ok(data) = serde_json::from_str::<serde_json::Value>(json_data) {
+                                    if let Some(choices) = data.get("choices").and_then(|c| c.as_array()) {
+                                        if let Some(choice) = choices.first() {
+                                            if let Some(delta) = choice.get("delta") {
+                                                if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                                    answer.push_str(content);
+                                                    callback(content);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if answer.trim().is_empty() {
+                        return Err(Error::Api("Empty response from chat completion API".to_string()));
+                    }
+
+                    let message = ChatMessage::assistant(&answer);
+                    return Ok(ChatCompletionResult::new(message, config.model_id.clone())
+                        .with_request_id(request_id));
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let error_text = resp
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    last_error = Some(Error::Api(format!(
+                        "Chat completion stream failed with status {}: {}",
+                        status, error_text
+                    )));
+                    // Try next endpoint
+                    continue;
+                }
+                Err(e) => {
+                    last_error = Some(Error::Network(e.to_string()));
+                    // Try next endpoint
+                    continue;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            Error::Api("All chat completion streaming endpoints failed".to_string())
+        }))
     }
 }
 

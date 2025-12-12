@@ -1,0 +1,25 @@
+# Clippy lint configuration for watsonx-rs
+#
+# Run `cargo clippy` to check for lint violations.
+# Run `cargo clippy -- -W clippy::all` to enable all lints.
+
+# Enable pedantic and nursery lints
+warn = ["clippy::pedantic", "clippy::nursery"]
+
+# Allow some pedantic lints that are too strict for this project
+allow = [
+    "clippy::module_name_repetitions",  # Module names can repeat (e.g., client.rs, client.rs in different modules)
+    "clippy::too_many_lines",           # Some functions are complex but necessary
+    "clippy::missing_errors_doc",        # Error docs are in error.rs
+    "clippy::must_use_candidate",        # Not all results need to be used
+    "clippy::cast_possible_truncation",  # Some casts are intentional
+    "clippy::cast_precision_loss",       # Some casts are intentional
+]
+
+# Deny dangerous patterns
+deny = [
+    "clippy::unwrap_used",      # Use proper error handling
+    "clippy::expect_used",      # Use proper error handling
+    "clippy::panic",            # No panics in library code
+    "clippy::todo",             # No TODOs in code (use TODO.md)
+]

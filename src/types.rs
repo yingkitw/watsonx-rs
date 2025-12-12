@@ -452,3 +452,292 @@ impl BatchGenerationResult {
         self.failed > 0
     }
 }
+
+/// A chat message with role and content
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChatMessage {
+    /// Role of the message sender (system, user, or assistant)
+    pub role: String,
+    /// Content of the message
+    pub content: String,
+}
+
+impl ChatMessage {
+    /// Create a new chat message
+    pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            content: content.into(),
+        }
+    }
+
+    /// Create a system message
+    pub fn system(content: impl Into<String>) -> Self {
+        Self::new("system", content)
+    }
+
+    /// Create a user message
+    pub fn user(content: impl Into<String>) -> Self {
+        Self::new("user", content)
+    }
+
+    /// Create an assistant message
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self::new("assistant", content)
+    }
+}
+
+/// Configuration for chat completion requests
+#[derive(Clone, Debug, Serialize)]
+pub struct ChatCompletionConfig {
+    /// Model ID to use for completion
+    pub model_id: String,
+    /// Request timeout
+    pub timeout: Duration,
+    /// Maximum number of tokens to generate
+    pub max_tokens: u32,
+    /// Temperature for generation (0.0 to 2.0)
+    pub temperature: Option<f32>,
+    /// Top-p sampling parameter
+    pub top_p: Option<f32>,
+    /// Top-k sampling parameter
+    pub top_k: Option<u32>,
+    /// Stop sequences to halt generation
+    pub stop_sequences: Vec<String>,
+    /// Repetition penalty
+    pub repetition_penalty: Option<f32>,
+}
+
+impl Default for ChatCompletionConfig {
+    fn default() -> Self {
+        Self {
+            model_id: crate::models::DEFAULT_MODEL.to_string(),
+            timeout: Duration::from_secs(120),
+            max_tokens: crate::models::DEFAULT_MAX_TOKENS,
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            top_k: Some(50),
+            stop_sequences: vec![],
+            repetition_penalty: Some(1.1),
+        }
+    }
+}
+
+impl ChatCompletionConfig {
+    /// Set the model ID
+    pub fn with_model(mut self, model_id: impl Into<String>) -> Self {
+        self.model_id = model_id.into();
+        self
+    }
+
+    /// Set the timeout
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Set maximum tokens
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
+        self.max_tokens = max_tokens.min(crate::models::MAX_TOKENS_LIMIT);
+        self
+    }
+
+    /// Set temperature
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = Some(temperature.max(0.0).min(2.0));
+        self
+    }
+
+    /// Set top-p parameter
+    pub fn with_top_p(mut self, top_p: f32) -> Self {
+        self.top_p = Some(top_p);
+        self
+    }
+
+    /// Set top-k parameter
+    pub fn with_top_k(mut self, top_k: u32) -> Self {
+        self.top_k = Some(top_k);
+        self
+    }
+
+    /// Set stop sequences
+    pub fn with_stop_sequences(mut self, stop_sequences: Vec<String>) -> Self {
+        self.stop_sequences = stop_sequences;
+        self
+    }
+
+    /// Set repetition penalty
+    pub fn with_repetition_penalty(mut self, penalty: f32) -> Self {
+        self.repetition_penalty = Some(penalty);
+        self
+    }
+}
+
+/// Result of a chat completion request
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChatCompletionResult {
+    /// Generated message content
+    pub message: ChatMessage,
+    /// Model ID used for completion
+    pub model_id: String,
+    /// Number of prompt tokens used (if available)
+    pub prompt_tokens: Option<u32>,
+    /// Number of completion tokens used (if available)
+    pub completion_tokens: Option<u32>,
+    /// Total tokens used (if available)
+    pub total_tokens: Option<u32>,
+    /// Finish reason (if available)
+    pub finish_reason: Option<String>,
+    /// Request ID for tracking
+    pub request_id: Option<String>,
+}
+
+impl ChatCompletionResult {
+    /// Create a new chat completion result
+    pub fn new(message: ChatMessage, model_id: String) -> Self {
+        Self {
+            message,
+            model_id,
+            prompt_tokens: None,
+            completion_tokens: None,
+            total_tokens: None,
+            finish_reason: None,
+            request_id: None,
+        }
+    }
+
+    /// Set token usage information
+    pub fn with_tokens(mut self, prompt: u32, completion: u32, total: u32) -> Self {
+        self.prompt_tokens = Some(prompt);
+        self.completion_tokens = Some(completion);
+        self.total_tokens = Some(total);
+        self
+    }
+
+    /// Set finish reason
+    pub fn with_finish_reason(mut self, reason: impl Into<String>) -> Self {
+        self.finish_reason = Some(reason.into());
+        self
+    }
+
+    /// Set the request ID
+    pub fn with_request_id(mut self, request_id: String) -> Self {
+        self.request_id = Some(request_id);
+        self
+    }
+
+    /// Get the content of the generated message
+    pub fn content(&self) -> &str {
+        &self.message.content
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chat_message_creation() {
+        let msg = ChatMessage::new("user", "Hello");
+        assert_eq!(msg.role, "user");
+        assert_eq!(msg.content, "Hello");
+
+        let system_msg = ChatMessage::system("You are a helpful assistant");
+        assert_eq!(system_msg.role, "system");
+        assert_eq!(system_msg.content, "You are a helpful assistant");
+
+        let user_msg = ChatMessage::user("What is Rust?");
+        assert_eq!(user_msg.role, "user");
+        assert_eq!(user_msg.content, "What is Rust?");
+
+        let assistant_msg = ChatMessage::assistant("Rust is a systems programming language");
+        assert_eq!(assistant_msg.role, "assistant");
+        assert_eq!(assistant_msg.content, "Rust is a systems programming language");
+    }
+
+    #[test]
+    fn test_chat_completion_config_default() {
+        let config = ChatCompletionConfig::default();
+        assert_eq!(config.model_id, crate::models::DEFAULT_MODEL);
+        assert_eq!(config.max_tokens, crate::models::DEFAULT_MAX_TOKENS);
+        assert_eq!(config.timeout.as_secs(), 120);
+        assert_eq!(config.temperature, Some(0.7));
+        assert_eq!(config.top_p, Some(1.0));
+        assert_eq!(config.top_k, Some(50));
+        assert_eq!(config.repetition_penalty, Some(1.1));
+    }
+
+    #[test]
+    fn test_chat_completion_config_builder() {
+        let config = ChatCompletionConfig::default()
+            .with_model("test-model")
+            .with_max_tokens(1000)
+            .with_temperature(0.9)
+            .with_top_p(0.95)
+            .with_top_k(40)
+            .with_stop_sequences(vec!["\n".to_string(), "END".to_string()])
+            .with_repetition_penalty(1.2)
+            .with_timeout(Duration::from_secs(60));
+
+        assert_eq!(config.model_id, "test-model");
+        assert_eq!(config.max_tokens, 1000);
+        assert_eq!(config.temperature, Some(0.9));
+        assert_eq!(config.top_p, Some(0.95));
+        assert_eq!(config.top_k, Some(40));
+        assert_eq!(config.stop_sequences.len(), 2);
+        assert_eq!(config.repetition_penalty, Some(1.2));
+        assert_eq!(config.timeout.as_secs(), 60);
+    }
+
+    #[test]
+    fn test_chat_completion_config_temperature_clamping() {
+        let config = ChatCompletionConfig::default().with_temperature(-1.0);
+        assert_eq!(config.temperature, Some(0.0)); // Clamped to minimum
+
+        let config = ChatCompletionConfig::default().with_temperature(3.0);
+        assert_eq!(config.temperature, Some(2.0)); // Clamped to maximum
+    }
+
+    #[test]
+    fn test_chat_completion_config_max_tokens_clamping() {
+        let config = ChatCompletionConfig::default().with_max_tokens(200_000);
+        assert_eq!(config.max_tokens, crate::models::MAX_TOKENS_LIMIT);
+    }
+
+    #[test]
+    fn test_chat_completion_result_creation() {
+        let message = ChatMessage::assistant("Hello, world!");
+        let result = ChatCompletionResult::new(message.clone(), "test-model".to_string());
+
+        assert_eq!(result.message.role, "assistant");
+        assert_eq!(result.message.content, "Hello, world!");
+        assert_eq!(result.model_id, "test-model");
+        assert!(result.prompt_tokens.is_none());
+        assert!(result.completion_tokens.is_none());
+        assert!(result.total_tokens.is_none());
+        assert!(result.finish_reason.is_none());
+        assert!(result.request_id.is_none());
+    }
+
+    #[test]
+    fn test_chat_completion_result_builder() {
+        let message = ChatMessage::assistant("Response");
+        let result = ChatCompletionResult::new(message, "model".to_string())
+            .with_tokens(10, 20, 30)
+            .with_finish_reason("stop")
+            .with_request_id("req-123".to_string());
+
+        assert_eq!(result.prompt_tokens, Some(10));
+        assert_eq!(result.completion_tokens, Some(20));
+        assert_eq!(result.total_tokens, Some(30));
+        assert_eq!(result.finish_reason, Some("stop".to_string()));
+        assert_eq!(result.request_id, Some("req-123".to_string()));
+    }
+
+    #[test]
+    fn test_chat_completion_result_content() {
+        let message = ChatMessage::assistant("Test content");
+        let result = ChatCompletionResult::new(message, "model".to_string());
+        assert_eq!(result.content(), "Test content");
+    }
+}

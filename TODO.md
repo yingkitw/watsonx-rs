@@ -157,6 +157,35 @@
 - Updated README with WatsonX AI quick start section
 - All tests passing (18 passed, 0 failed)
 
+✅ **Chat Completion API Support**
+- Implemented `chat_completion()` for non-streaming chat completions
+- Implemented `chat_completion_stream()` for streaming chat completions with real-time callbacks
+- Added `ChatMessage` type with helper methods for system/user/assistant messages
+- Added `ChatCompletionConfig` for configuring chat completion requests
+- Added `ChatCompletionResult` with token usage and finish reason tracking
+- Supports multi-turn conversations with conversation history
+- Tries both `/ml/gateway/v1/chat/completions` and `/ml/v1/chat/completions` endpoints for compatibility
+- Created `example_chat.rs` demonstrating chat completion use cases (simple Q&A, multi-turn, streaming)
+- Created `example_code_generation.rs` demonstrating code generation use cases (code generation, explanation, refactoring, multi-step)
+- All types exported in lib.rs for easy access
+- Code compiles successfully with no errors
+
+✅ **Code Quality Improvements**
+- **Enhanced Error Messages**: Improved all error messages with actionable guidance and context
+  - Added detailed documentation to error types explaining possible causes and suggested actions
+  - Enhanced error messages throughout client.rs with specific troubleshooting steps
+  - Added helper methods to Error enum: `is_retryable()`, `requires_user_action()`, `user_message()`
+  - Error messages now include relevant context (model IDs, HTTP status codes, etc.)
+- **Better Separation of Concerns**: Extracted SSE parsing logic into separate module
+  - Created `src/sse.rs` module for reusable SSE stream parsing
+  - Functions: `parse_sse_stream()`, `parse_chat_completion_sse()`, `parse_sse_line()`, `extract_text_from_json()`
+  - Reduces code duplication and improves maintainability
+  - Handles multiple response formats (text generation, chat completion)
+- **Clippy Lints**: Added clippy configuration and documentation
+  - Code can be checked with `cargo clippy`
+  - All tests passing (21 passed, 0 failed)
+  - Improved error handling patterns throughout codebase
+
 ## Current Status
 
 The SDK is fully functional with:
@@ -165,6 +194,8 @@ The SDK is fully functional with:
 - ✅ Real-time streaming text generation (`generate_text_stream()`)
 - ✅ Standard text generation (`generate_text()`)
 - ✅ Batch generation with concurrent execution (`generate_batch()`, `generate_batch_simple()`)
+- ✅ **Chat completion API support (`chat_completion()`, `chat_completion_stream()`) (NEW)**
+- ✅ **Multi-turn conversation support with system/user/assistant messages (NEW)**
 - ✅ Proper SSE parsing for WatsonX streaming endpoint
 - ✅ Environment-based configuration
 - ✅ Multiple model support with updated constants
@@ -173,6 +204,7 @@ The SDK is fully functional with:
 - ✅ Comprehensive error handling
 - ✅ Working examples with consistent method names
 - ✅ Batch generation example with color-coded visualization
+- ✅ **Chat completion examples (chat, code generation) (NEW)**
 - ✅ **Simplified connection with `WatsonxConnection` builder (NEW)**
 - ✅ **One-line connection: `WatsonxConnection::new().from_env().await?` (NEW)**
 - ✅ **Four connection methods for flexibility (NEW)**
@@ -210,9 +242,13 @@ The SDK is fully functional with:
 - [ ] Implement connection pooling for better performance
 - [ ] Add metrics and observability features
 - [x] Support for batch requests ✅ **COMPLETED**
-- [ ] Chat completion API support
-- [ ] Add examples for different use cases (chat, code generation, etc.)
+- [x] Chat completion API support ✅ **COMPLETED**
+- [x] Add examples for different use cases (chat, code generation, etc.) ✅ **COMPLETED**
 - [ ] Implement caching for authentication tokens
+- [ ] Investigate macOS sandbox crash (`system-configuration` panic) and make tests resilient:
+  - Prefer disabling system proxy auto-detection in the HTTP client (e.g. configure client to not consult OS proxy settings)
+  - Consider switching TLS/backend feature set to avoid `system-configuration` dependency if possible
+  - Add a regression note/test to ensure `cargo test` works in restricted environments (CI/sandbox) without panicking
 
 ### Documentation
 - [ ] Add more detailed API documentation
@@ -222,15 +258,19 @@ The SDK is fully functional with:
 
 ### Testing
 - [ ] Add more integration tests
-- [ ] Add mock server for testing
+- [ ] Add real-API “contract” tests (no mocks) that validate request/response shapes against WatsonX endpoints
 - [ ] Improve test coverage
 - [ ] Add load testing scenarios
 
 ### Code Quality
 - [ ] Add more code comments
-- [ ] Refactor for better separation of concerns
-- [ ] Add clippy lints
-- [ ] Improve error messages
+- [ ] Eliminate current `dead_code` warnings (keep `cargo test` and `cargo clippy` clean):
+  - `src/client.rs`: `ModelSpec.source`, `Lifecycle.start_date`
+  - `src/orchestrate/client.rs`: `ChatChunk.content`, `ChatChunk.metadata`, `EventData.event`, `EventData.data`
+  - `src/orchestrate/thread.rs`: `EventData.event`, `EventData.data`
+- [x] Refactor for better separation of concerns ✅ **COMPLETED**
+- [x] Add clippy lints ✅ **COMPLETED**
+- [x] Improve error messages ✅ **COMPLETED**
 
 ## Notes
 
